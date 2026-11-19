@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Wrench, ShieldCheck, Clock } from "lucide-react";
 import RepairRequestModal from "@/components/services/RepairRequestModal";
 
-// The service detail is fetched from the API at request time.
 export const instant = false;
 
 export type ServiceDetail = {
