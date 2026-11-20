@@ -117,13 +117,7 @@ export default async function ServiceDetailsPage({
                   ${service.basePrice}
                 </p>
               </div>
-
-              {/* <Link
-                href={`/booking/${service._id}`}
-                className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-6 py-3 rounded-xl transition"
-              >
-                Book Now
-              </Link> */}
+              
               <RepairRequestModal
                 service={{
                     _id: String(service._id),

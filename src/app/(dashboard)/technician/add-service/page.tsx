@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import Link from "next/link";
-import { PlusCircle, CheckCircle2, ArrowLeft } from "lucide-react";
+import {
+  PlusCircle,
+  CheckCircle2,
+  ArrowLeft,
+  Upload,
+  Loader2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 
@@ -23,6 +30,8 @@ export default function AddServicePage() {
   const technicianName = session?.user?.name ?? "";
   const technicianEmail = session?.user?.email ?? "";
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [formData, setFormData] = useState({
     title: "",
     category: "Smartphone",
@@ -34,6 +43,9 @@ export default function AddServicePage() {
     serviceArea: "",
   });
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -42,6 +54,7 @@ export default function AddServicePage() {
 
   const baseUrl =
     process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  const imgbbApiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -52,6 +65,60 @@ export default function AddServicePage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file.");
+      return;
+    }
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setSelectedFile(file);
+    setPreviewUrl(objectUrl);
+  };
+
+  const handleClearImage = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setSelectedFile(null);
+    setPreviewUrl("");
+    setFormData((prev) => ({ ...prev, image: "" }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const uploadToImgBB = async (file: File): Promise<string> => {
+    if (!imgbbApiKey) {
+      throw new Error("NEXT_PUBLIC_IMGBB_API_KEY is missing in .env.local");
+    }
+
+    const body = new FormData();
+    body.append("image", file);
+
+    const res = await fetch(
+      `https://api.imgbb.com/1/upload?key=${imgbbApiKey}`,
+      {
+        method: "POST",
+        body,
+      }
+    );
+
+    const data = await res.json();
+    if (!res.ok || !data?.success || !data?.data?.url) {
+      throw new Error(data?.error?.message || "Failed to upload image to ImgBB");
+    }
+
+    return data.data.url as string;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -60,56 +127,92 @@ export default function AddServicePage() {
       return;
     }
 
-    setSubmitting(true);
-    setFeedback(null);
-
-    const payload = {
-      title: formData.title,
-      category: formData.category,
-      description: formData.description,
-      image: formData.image,
-      basePrice: Number(formData.basePrice),
-      estimatedDuration: formData.estimatedDuration,
-      serviceMode: formData.serviceMode,
-      serviceArea: formData.serviceArea,
-      technicianName,
-      technicianEmail,
-    };
-
-    const res = await fetch(`${baseUrl}/services`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    setSubmitting(false);
-
-    if (!res.ok) {
-      setFeedback({
-        type: "error",
-        message: data.message || "Could not create service.",
-      });
+    if (!formData.title.trim()) {
+      toast.error("Please enter a service title.");
       return;
     }
 
-    toast.success("Service added successfully!");
-    setFeedback({
-      type: "success",
-      message:
-        "Service submitted! It is now in your My Services list with 'pending' approval status.",
-    });
+    const numericPrice = Number(formData.basePrice);
+    if (!numericPrice || Number.isNaN(numericPrice) || numericPrice <= 0) {
+      toast.error("Base Price must be a positive number.");
+      return;
+    }
 
-    setFormData({
-      title: "",
-      category: "Smartphone",
-      description: "",
-      image: "",
-      basePrice: "",
-      estimatedDuration: "",
-      serviceMode: "Home Visit",
-      serviceArea: "",
-    });
+    setSubmitting(true);
+    setFeedback(null);
+
+    try {
+      let imageUrl = formData.image;
+
+      if (selectedFile) {
+        setUploadingImage(true);
+        imageUrl = await uploadToImgBB(selectedFile);
+        setUploadingImage(false);
+      }
+
+      const payload = {
+        title: formData.title.trim(),
+        category: formData.category,
+        description: formData.description.trim(),
+        image: imageUrl,
+        basePrice: numericPrice,
+        estimatedDuration: formData.estimatedDuration.trim(),
+        serviceMode: formData.serviceMode,
+        serviceArea: formData.serviceArea.trim(),
+        technicianName,
+        technicianEmail,
+        approvalStatus: "pending",
+        isAvailable: true,
+      };
+
+      const res = await fetch(`${baseUrl}/services`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errMsg = data.message || "Could not create service.";
+        toast.error(errMsg);
+        setFeedback({
+          type: "error",
+          message: errMsg,
+        });
+        return;
+      }
+
+      toast.success("Service submitted! Waiting for admin approval.");
+      setFeedback({
+        type: "success",
+        message:
+          "Service submitted and is waiting for admin approval. Status is set to 'pending' and availability is active.",
+      });
+
+      setFormData({
+        title: "",
+        category: "Smartphone",
+        description: "",
+        image: "",
+        basePrice: "",
+        estimatedDuration: "",
+        serviceMode: "Home Visit",
+        serviceArea: "",
+      });
+      handleClearImage();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Failed to submit service.";
+      toast.error(message);
+      setFeedback({
+        type: "error",
+        message,
+      });
+    } finally {
+      setUploadingImage(false);
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -160,6 +263,32 @@ export default function AddServicePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-300">
+                Technician Name
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={technicianName}
+                placeholder="Loading technician name..."
+                className="w-full bg-[#090d16]/70 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-300">
+                Technician Email
+              </label>
+              <input
+                type="email"
+                readOnly
+                value={technicianEmail}
+                placeholder="Loading technician email..."
+                className="w-full bg-[#090d16]/70 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-300">
                 Service Title *
               </label>
               <input
@@ -199,7 +328,7 @@ export default function AddServicePage() {
                 type="number"
                 name="basePrice"
                 required
-                min="1"
+                min="0.01"
                 step="any"
                 value={formData.basePrice}
                 onChange={handleChange}
@@ -255,17 +384,60 @@ export default function AddServicePage() {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300">
-              Service Banner URL (ImgBB)
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-slate-300">
+              Service Image
             </label>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="relative w-36 h-24 rounded-xl border border-slate-800 bg-[#090d16] flex items-center justify-center overflow-hidden shrink-0">
+                {previewUrl ? (
+                  <>
+                    <img
+                      src={previewUrl}
+                      alt="Service preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleClearImage}
+                      title="Remove image"
+                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/90 text-slate-200 hover:bg-rose-600 flex items-center justify-center transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-500 font-medium">
+                    No image yet
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 bg-[#090d16] hover:bg-slate-900 border border-slate-800 hover:border-teal-500 text-slate-200 text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5 text-teal-400" />
+                  Upload image
+                </button>
+
+                {selectedFile && (
+                  <span className="text-xs text-teal-400 truncate max-w-[200px]">
+                    {selectedFile.name}
+                  </span>
+                )}
+              </div>
+            </div>
+
             <input
-              type="url"
-              name="image"
-              value={formData.image}
-              onChange={handleChange}
-              placeholder="https://i.ibb.co/..."
-              className="w-full bg-[#090d16] border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-500"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
             />
           </div>
 
@@ -286,11 +458,19 @@ export default function AddServicePage() {
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || uploadingImage}
               className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-60 text-white text-sm font-semibold px-6 py-3 rounded-xl transition cursor-pointer"
             >
-              <PlusCircle className="w-4 h-4" />
-              {submitting ? "Submitting..." : "Submit Service"}
+              {submitting || uploadingImage ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <PlusCircle className="w-4 h-4" />
+              )}
+              {uploadingImage
+                ? "Uploading Image..."
+                : submitting
+                ? "Submitting..."
+                : "Submit Service"}
             </button>
           </div>
         </form>

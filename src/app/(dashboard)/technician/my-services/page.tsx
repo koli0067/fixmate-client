@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Clock,
@@ -9,6 +9,8 @@ import {
   Trash2,
   Pencil,
   X,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -61,6 +63,7 @@ export default function MyServicesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Edit Modal State
+  const editFileInputRef = useRef<HTMLInputElement | null>(null);
   const [editingService, setEditingService] = useState<TechnicianService | null>(
     null
   );
@@ -74,10 +77,14 @@ export default function MyServicesPage() {
     serviceMode: "Home Visit",
     serviceArea: "",
   });
+  const [selectedEditFile, setSelectedEditFile] = useState<File | null>(null);
+  const [editPreviewUrl, setEditPreviewUrl] = useState<string>("");
+  const [uploadingEditImage, setUploadingEditImage] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
   const baseUrl =
     process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  const imgbbApiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
 
   const loadMyServices = useCallback(async () => {
     if (!technicianEmail) {
@@ -111,7 +118,19 @@ export default function MyServicesPage() {
     loadMyServices();
   }, [loadMyServices]);
 
+  const resetEditImageState = () => {
+    if (editPreviewUrl && editPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(editPreviewUrl);
+    }
+    setSelectedEditFile(null);
+    setEditPreviewUrl("");
+    if (editFileInputRef.current) {
+      editFileInputRef.current.value = "";
+    }
+  };
+
   const openEditModal = (service: TechnicianService) => {
+    resetEditImageState();
     setEditingService(service);
     setEditForm({
       title: service.title || "",
@@ -123,6 +142,12 @@ export default function MyServicesPage() {
       serviceMode: service.serviceMode || "Home Visit",
       serviceArea: service.serviceArea || "",
     });
+    setEditPreviewUrl(service.image || "");
+  };
+
+  const closeEditModal = () => {
+    resetEditImageState();
+    setEditingService(null);
   };
 
   const handleEditChange = (
@@ -134,21 +159,77 @@ export default function MyServicesPage() {
     setEditForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file.");
+      return;
+    }
+
+    if (editPreviewUrl && editPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(editPreviewUrl);
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setSelectedEditFile(file);
+    setEditPreviewUrl(objectUrl);
+  };
+
+  const uploadToImgBB = async (file: File): Promise<string> => {
+    if (!imgbbApiKey) {
+      throw new Error("NEXT_PUBLIC_IMGBB_API_KEY is missing in .env.local");
+    }
+
+    const body = new FormData();
+    body.append("image", file);
+
+    const res = await fetch(
+      `https://api.imgbb.com/1/upload?key=${imgbbApiKey}`,
+      {
+        method: "POST",
+        body,
+      }
+    );
+
+    const data = await res.json();
+    if (!res.ok || !data?.success || !data?.data?.url) {
+      throw new Error(data?.error?.message || "Failed to upload image to ImgBB");
+    }
+
+    return data.data.url as string;
+  };
+
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingService) return;
 
+    const numericPrice = Number(editForm.basePrice);
+    if (!numericPrice || Number.isNaN(numericPrice) || numericPrice <= 0) {
+      toast.error("Base price must be a positive number.");
+      return;
+    }
+
     setSavingEdit(true);
     try {
+      let imageUrl = editForm.image;
+
+      if (selectedEditFile) {
+        setUploadingEditImage(true);
+        imageUrl = await uploadToImgBB(selectedEditFile);
+        setUploadingEditImage(false);
+      }
+
       const updatedPayload = {
-        title: editForm.title,
+        title: editForm.title.trim(),
         category: editForm.category,
-        description: editForm.description,
-        image: editForm.image,
-        basePrice: Number(editForm.basePrice),
-        estimatedDuration: editForm.estimatedDuration,
+        description: editForm.description.trim(),
+        image: imageUrl,
+        basePrice: numericPrice,
+        estimatedDuration: editForm.estimatedDuration.trim(),
         serviceMode: editForm.serviceMode,
-        serviceArea: editForm.serviceArea,
+        serviceArea: editForm.serviceArea.trim(),
         approvalStatus: "pending" as const,
       };
 
@@ -169,14 +250,17 @@ export default function MyServicesPage() {
         toast.success(
           "Service updated! Status set to 'pending' for admin review."
         );
-        setEditingService(null);
+        closeEditModal();
       } else {
         toast.error("Could not update service.");
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Could not update service.";
       console.error("Failed to update service:", error);
-      toast.error("Could not update service.");
+      toast.error(message);
     } finally {
+      setUploadingEditImage(false);
       setSavingEdit(false);
     }
   };
@@ -433,7 +517,7 @@ export default function MyServicesPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setEditingService(null)}
+                onClick={closeEditModal}
                 className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -478,7 +562,7 @@ export default function MyServicesPage() {
                     type="number"
                     name="basePrice"
                     required
-                    min="1"
+                    min="0.01"
                     step="any"
                     value={editForm.basePrice}
                     onChange={handleEditChange}
@@ -529,14 +613,48 @@ export default function MyServicesPage() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-slate-300">Image URL</label>
+              <div className="space-y-1.5">
+                <label className="block text-xs text-slate-300">
+                  Service Image
+                </label>
+                <div className="flex items-center gap-3.5">
+                  <div className="w-28 h-20 rounded-xl border border-slate-800 bg-[#090d16] flex items-center justify-center overflow-hidden shrink-0">
+                    {editPreviewUrl ? (
+                      <img
+                        src={editPreviewUrl}
+                        alt="Edit preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[11px] text-slate-500">
+                        No image yet
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => editFileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 bg-[#090d16] hover:bg-slate-900 border border-slate-800 hover:border-teal-500 text-slate-200 text-xs font-semibold px-3.5 py-2 rounded-xl transition cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-teal-400" />
+                      Upload image
+                    </button>
+                    {selectedEditFile && (
+                      <p className="text-xs text-teal-400 truncate max-w-[200px]">
+                        {selectedEditFile.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <input
-                  type="url"
-                  name="image"
-                  value={editForm.image}
-                  onChange={handleEditChange}
-                  className="w-full bg-[#090d16] border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-teal-500"
+                  ref={editFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleEditFileChange}
+                  className="hidden"
                 />
               </div>
 
@@ -554,17 +672,24 @@ export default function MyServicesPage() {
               <div className="flex justify-end gap-2.5 pt-2">
                 <button
                   type="button"
-                  onClick={() => setEditingService(null)}
+                  onClick={closeEditModal}
                   className="px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 text-slate-300 border border-slate-700 hover:bg-slate-800 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={savingEdit}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white disabled:opacity-60 cursor-pointer"
+                  disabled={savingEdit || uploadingEditImage}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white disabled:opacity-60 cursor-pointer"
                 >
-                  {savingEdit ? "Saving..." : "Save Changes"}
+                  {(savingEdit || uploadingEditImage) && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  )}
+                  {uploadingEditImage
+                    ? "Uploading..."
+                    : savingEdit
+                    ? "Saving..."
+                    : "Save Changes"}
                 </button>
               </div>
             </form>

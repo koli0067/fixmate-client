@@ -1,4 +1,4 @@
-// src/app/(dashboard)/layout.tsx
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -97,7 +97,7 @@ export default function DashboardLayout({
       ];
     } else {
       return [
-        { name: "Dashboard", href: "/customer", icon: LayoutDashboard },
+        { name: "Overview", href: "/customer", icon: LayoutDashboard },
         { name: "My Bookings", href: "/customer/bookings", icon: ShoppingBag },
         { name: "Payment History", href: "/customer/payments", icon: CreditCard },
       ];
