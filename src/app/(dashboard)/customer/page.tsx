@@ -220,7 +220,7 @@ export default function CustomerDashboardPage() {
           </div>
 
           <Link
-            href="/dashboard/customer/bookings"
+            href="customer/bookings"
             className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-teal-400 hover:text-teal-300 transition"
           >
             View All Bookings

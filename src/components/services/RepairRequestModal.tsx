@@ -213,7 +213,7 @@ export default function RepairRequestModal({
                     Close
                   </button>
                   <Link
-                    href="/dashboard/customer/my-bookings"
+                   href="/customer/bookings"
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white"
                   >
                     Go to My Bookings

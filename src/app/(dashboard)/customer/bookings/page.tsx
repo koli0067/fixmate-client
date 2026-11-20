@@ -120,14 +120,48 @@ export default function CustomerBookingsPage() {
     }
   };
 
-  const handlePayNow = async (booking: CustomerBooking) => {
+  // const handlePayNow = async (booking: CustomerBooking) => {
+  //   setPayingId(booking._id);
+  //   try {
+  //     const amount =
+  //       typeof booking.finalAmount === "number" && booking.finalAmount > 0
+  //         ? booking.finalAmount
+  //         : booking.basePrice;
+
+  //     const res = await fetch("/api/checkout_sessions", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ bookingId: booking._id, amount }),
+  //     });
+
+  //     const data = await res.json().catch(() => ({}));
+  //     if (res.ok && data.url) {
+  //       window.location.href = data.url;
+  //     } else {
+  //       toast.error(
+  //         data.message ||
+  //           "Stripe checkout session could not be started for this booking."
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error("Payment checkout error:", error);
+  //     toast.error("Unable to start payment right now.");
+  //   } finally {
+  //     setPayingId(null);
+  //   }
+  // };
+
+const handlePayNow = async (booking: CustomerBooking) => {
     setPayingId(booking._id);
     try {
-      const res = await fetch(`${baseUrl}/api/payments/create-checkout-session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId: booking._id }),
-      });
+      const res = await fetch(
+        `${baseUrl}/api/payments/create-checkout-session`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId: booking._id }),
+        }
+      );
 
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.url) {
@@ -135,6 +169,7 @@ export default function CustomerBookingsPage() {
       } else {
         toast.error(
           data.message ||
+            data.error ||
             "Stripe checkout session could not be started for this booking."
         );
       }

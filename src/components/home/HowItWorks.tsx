@@ -1,4 +1,4 @@
-// src/components/home/HowItWorks.tsx
+
 import { Search, Send, Wrench, CheckCircle2 } from "lucide-react";
 
 export default function HowItWorks() {
