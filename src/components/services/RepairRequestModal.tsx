@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { X, Wrench, CheckCircle2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
@@ -23,6 +23,7 @@ export default function RepairRequestModal({
   service: ServiceSummary;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: session, isPending } = useSession();
 
   const user = session?.user as
@@ -48,14 +49,17 @@ export default function RepairRequestModal({
   const baseUrl =
     process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
 
-  const todayDate = new Date().toISOString().split("T")[0];
+  const todayDate = new Date().toLocaleDateString("en-CA");
 
   const handleOpenClick = () => {
     if (isPending) return;
 
     if (!isLoggedIn) {
       toast.info("Please sign in as a customer to request a repair.");
-      router.push("/sign-in");
+      const redirectTarget = encodeURIComponent(
+        pathname || `/services/${service._id}`
+      );
+      router.push(`/sign-in?callbackUrl=${redirectTarget}`);
       return;
     }
 
@@ -83,7 +87,7 @@ export default function RepairRequestModal({
       return;
     }
 
-    if (formData.preferredDate && formData.preferredDate < todayDate) {
+    if (!formData.preferredDate || formData.preferredDate < todayDate) {
       toast.error("Preferred date must be today or a future date.");
       return;
     }
@@ -145,7 +149,7 @@ export default function RepairRequestModal({
           disabled
           className="w-full py-3 px-5 rounded-xl bg-slate-800 text-slate-500 text-sm font-semibold cursor-not-allowed border border-slate-700"
         >
-          Request Repair
+          Request repair
         </button>
         <p className="text-xs text-amber-400">
           Only customers can request a repair.
@@ -159,10 +163,10 @@ export default function RepairRequestModal({
       <button
         type="button"
         onClick={handleOpenClick}
-        className="w-full inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold py-3 px-5 rounded-xl transition cursor-pointer"
+        className="w-full inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold py-3 px-6 rounded-xl transition cursor-pointer"
       >
         <Wrench className="w-4 h-4" />
-        Request Repair
+        Request repair
       </button>
 
       {isOpen && (
@@ -196,8 +200,8 @@ export default function RepairRequestModal({
                     Repair Request Sent!
                   </h4>
                   <p className="text-xs text-slate-400">
-                    Your booking is now in "requested" status. You can
-                    track it in My Bookings.
+                    Your booking is now in "requested" status. You can track it
+                    in My Bookings.
                   </p>
                 </div>
                 <div className="flex items-center justify-center gap-3 pt-2">
@@ -209,7 +213,7 @@ export default function RepairRequestModal({
                     Close
                   </button>
                   <Link
-                    href="/customer/bookings"
+                    href="/dashboard/customer/my-bookings"
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white"
                   >
                     Go to My Bookings
