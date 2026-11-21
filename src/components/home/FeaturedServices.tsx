@@ -1,4 +1,3 @@
-
 import Link from "next/link";
 
 type Service = {
@@ -18,16 +17,16 @@ const FeaturedServices = async () => {
 
   try {
     const baseUrl =
-      process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+      process.env.NEXT_PUBLIC_SERVER_BASE_URL ||
+      "https://fixmate-server-side.vercel.app";
 
     // Fetch latest 6 approved and available services from the backend
     const res = await fetch(`${baseUrl}/services?limit=6`, {
-      cache: "no-store",
+      next: { revalidate: 60 },
     });
 
     if (res.ok) {
       const data = await res.json();
-
       services = Array.isArray(data) ? data : data.services || [];
     }
   } catch (error) {
