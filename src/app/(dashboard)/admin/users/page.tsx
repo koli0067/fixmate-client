@@ -5,6 +5,36 @@ import { Shield, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 type AdminUser = {
   _id: string;
   name?: string;
@@ -21,30 +51,47 @@ const ROLES: Array<"customer" | "technician" | "admin"> = [
 ];
 
 export default function ManageUsersPage() {
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const currentAdminEmail = (session?.user?.email || "").toLowerCase();
+  const currentAdminName = session?.user?.name ?? "";
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const token = await getOrSyncToken(currentAdminEmail, currentAdminName);
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, [currentAdminEmail, currentAdminName]);
 
   const loadUsers = useCallback(async () => {
+    if (isPending) return;
+
     setLoading(true);
     try {
-      const res = await fetch(`${baseUrl}/admin/users`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load users");
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${baseUrl}/admin/users`, {
+        cache: "no-store",
+        headers,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to load users");
+      }
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
-      toast.error("Could not load users.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not load users."
+      );
     } finally {
       setLoading(false);
     }
-  }, [baseUrl]);
+  }, [getAuthHeaders, isPending]);
 
   useEffect(() => {
     loadUsers();
@@ -62,9 +109,10 @@ export default function ManageUsersPage() {
 
     setUpdatingId(user._id);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${baseUrl}/admin/users/${user._id}/role`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           role: newRole,
           adminEmail: session?.user?.email,
@@ -111,7 +159,7 @@ export default function ManageUsersPage() {
         </p>
       </div>
 
-      {loading ? (
+      {loading || isPending ? (
         <div className="h-64 bg-[#131b2e] border border-slate-800/80 rounded-2xl animate-pulse" />
       ) : users.length === 0 ? (
         <div className="bg-[#131b2e] border border-slate-800/80 rounded-2xl p-10 text-center text-slate-400 text-sm">

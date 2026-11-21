@@ -49,17 +49,53 @@ type CustomerBooking = {
   paymentStatus: "unpaid" | "paid";
 };
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 export default function CustomerBookingsPage() {
   const { data: session, isPending } = useSession();
   const customerEmail = session?.user?.email ?? "";
+  const customerName = session?.user?.name ?? "";
 
   const [bookings, setBookings] = useState<CustomerBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const token = await getOrSyncToken(customerEmail, customerName);
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, [customerEmail, customerName]);
 
   const loadMyBookings = useCallback(async () => {
     if (!customerEmail) {
@@ -71,15 +107,17 @@ export default function CustomerBookingsPage() {
 
     setLoading(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(
         `${baseUrl}/bookings/customer/${encodeURIComponent(customerEmail)}`,
-        { cache: "no-store" }
+        { cache: "no-store", headers }
       );
       if (res.ok) {
         const data = await res.json();
         setBookings(Array.isArray(data) ? data : []);
       } else {
-        toast.error("Could not load your bookings.");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Could not load your bookings.");
       }
     } catch (error) {
       console.error("Failed to fetch customer bookings:", error);
@@ -87,7 +125,7 @@ export default function CustomerBookingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, isPending, customerEmail]);
+  }, [customerEmail, getAuthHeaders, isPending]);
 
   useEffect(() => {
     loadMyBookings();
@@ -96,9 +134,10 @@ export default function CustomerBookingsPage() {
   const handleCancelBooking = async (bookingId: string) => {
     setCancellingId(bookingId);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${baseUrl}/bookings/${bookingId}/cancel`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers,
       });
 
       if (res.ok) {
@@ -120,45 +159,15 @@ export default function CustomerBookingsPage() {
     }
   };
 
-  // const handlePayNow = async (booking: CustomerBooking) => {
-  //   setPayingId(booking._id);
-  //   try {
-  //     const amount =
-  //       typeof booking.finalAmount === "number" && booking.finalAmount > 0
-  //         ? booking.finalAmount
-  //         : booking.basePrice;
-
-  //     const res = await fetch("/api/checkout_sessions", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({ bookingId: booking._id, amount }),
-  //     });
-
-  //     const data = await res.json().catch(() => ({}));
-  //     if (res.ok && data.url) {
-  //       window.location.href = data.url;
-  //     } else {
-  //       toast.error(
-  //         data.message ||
-  //           "Stripe checkout session could not be started for this booking."
-  //       );
-  //     }
-  //   } catch (error) {
-  //     console.error("Payment checkout error:", error);
-  //     toast.error("Unable to start payment right now.");
-  //   } finally {
-  //     setPayingId(null);
-  //   }
-  // };
-
-const handlePayNow = async (booking: CustomerBooking) => {
+  const handlePayNow = async (booking: CustomerBooking) => {
     setPayingId(booking._id);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(
         `${baseUrl}/api/payments/create-checkout-session`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ bookingId: booking._id }),
         }
       );

@@ -1,4 +1,3 @@
-"use client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -10,7 +9,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import RepairRequestModal from "@/components/services/RepairRequestModal";
-export const dynamic = "force-dynamic";
 
 export type ServiceDetail = {
   _id: string;

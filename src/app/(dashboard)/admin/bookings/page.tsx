@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
 
 type AdminBooking = {
   _id: string;
@@ -27,34 +28,77 @@ const STATUS_FILTERS = [
   "cancelled",
 ];
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 export default function AdminAllBookingsPage() {
+  const { data: session, isPending } = useSession();
+  const adminEmail = session?.user?.email ?? "";
+  const adminName = session?.user?.name ?? "";
+
   const [bookings, setBookings] = useState<AdminBooking[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
-
   const loadBookings = useCallback(async () => {
+    if (isPending) return;
+
     setLoading(true);
     try {
+      const token = await getOrSyncToken(adminEmail, adminName);
       const query =
         statusFilter !== "all"
           ? `?status=${encodeURIComponent(statusFilter)}`
           : "";
       const res = await fetch(`${baseUrl}/admin/bookings${query}`, {
         cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
-      if (!res.ok) throw new Error("Failed to load bookings");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to load bookings");
+      }
       const data = await res.json();
       setBookings(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
-      toast.error("Could not load bookings.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not load bookings."
+      );
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, statusFilter]);
+  }, [adminEmail, adminName, isPending, statusFilter]);
 
   useEffect(() => {
     loadBookings();
@@ -98,7 +142,7 @@ export default function AdminAllBookingsPage() {
         </select>
       </div>
 
-      {loading ? (
+      {loading || isPending ? (
         <div className="h-64 bg-[#131b2e] border border-slate-800/80 rounded-2xl animate-pulse" />
       ) : bookings.length === 0 ? (
         <div className="bg-[#131b2e] border border-slate-800/80 rounded-2xl p-10 text-center text-slate-400 text-sm">

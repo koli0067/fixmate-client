@@ -1,51 +1,131 @@
-
 "use client";
 
-import { useState } from "react";
-import { signIn } from "@/lib/auth-client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { signIn, useSession } from "@/lib/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Wrench, Eye, EyeOff } from "lucide-react";
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function syncJwtToken(email: string, name?: string) {
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data as { token: string; role?: string; email?: string };
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+  return null;
+}
+
+function getSafeCallbackUrl(url: string | null) {
+  if (!url) return null;
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    return url;
+  }
+  return null;
+}
+
 export default function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl");
+  const safeCallbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
+  const { data: session, isPending } = useSession();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const hasRedirectedRef = useRef(false);
+
+  const navigateAfterAuth = useCallback(
+    (role?: string) => {
+      if (hasRedirectedRef.current) return;
+      hasRedirectedRef.current = true;
+
+      if (safeCallbackUrl) {
+        router.replace(safeCallbackUrl);
+        return;
+      }
+
+      const normalizedRole = (role || "customer").toLowerCase();
+      if (normalizedRole === "admin") {
+        router.replace("/admin");
+      } else if (normalizedRole === "technician") {
+        router.replace("/technician");
+      } else {
+        router.replace("/customer");
+      }
+    },
+    [router, safeCallbackUrl]
+  );
+
+  // আগে থেকেই লগইন করা থাকলে ড্যাশবোর্ডে বা আগের পেজে পাঠাবে + টোকেন সিঙ্ক রাখবে
+  useEffect(() => {
+    if (isPending || !session?.user || hasRedirectedRef.current) return;
+
+    let active = true;
+
+    const redirectExisting = async () => {
+      const synced = await syncJwtToken(
+        session.user.email || "",
+        session.user.name || ""
+      );
+      if (!active || hasRedirectedRef.current) return;
+
+      const userRole =
+        synced?.role || (session.user as { role?: string })?.role || "customer";
+      navigateAfterAuth(userRole);
+    };
+
+    redirectExisting();
+
+    return () => {
+      active = false;
+    };
+  }, [isPending, navigateAfterAuth, session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || hasRedirectedRef.current) return;
+
     setLoading(true);
+    localStorage.removeItem("token");
+    localStorage.removeItem("auth_token");
 
     try {
       await signIn.email(
         {
-          email,
+          email: email.trim(),
           password,
         },
         {
-          onSuccess: (ctx) => {
+          onSuccess: async (ctx) => {
+            const signedInEmail = ctx.data?.user?.email || email.trim();
+            const signedInName = ctx.data?.user?.name || "";
+
+            const synced = await syncJwtToken(signedInEmail, signedInName);
+
             setLoading(false);
             toast.success("Signed in successfully!");
 
-            if (callbackUrl) {
-              router.replace(callbackUrl);
-              return;
-            }
-
-            const userRole = (ctx.data?.user as { role?: string })?.role;
-            if (userRole === "admin") {
-              router.replace("/admin");
-            } else if (userRole === "technician") {
-              router.replace("/technician");
-            } else {
-              router.replace("/customer");
-            }
+            const userRole =
+              synced?.role ||
+              (ctx.data?.user as { role?: string })?.role ||
+              "customer";
+            navigateAfterAuth(userRole);
           },
           onError: (ctx) => {
             setLoading(false);
@@ -62,7 +142,6 @@ export default function SignInForm() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-12">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-        
         <div className="flex flex-col items-center mb-6">
           <Link href="/" className="flex items-center gap-2 mb-2">
             <div className="bg-teal-600 text-white p-2 rounded-xl">
@@ -73,12 +152,16 @@ export default function SignInForm() {
             </span>
           </Link>
           <h1 className="text-xl font-bold text-slate-900 mt-2">Welcome Back</h1>
-          <p className="text-sm text-slate-500">Sign in to manage your repairs & services</p>
+          <p className="text-sm text-slate-500">
+            Sign in to manage your repairs & services
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Email Address
+            </label>
             <input
               type="email"
               required
@@ -90,7 +173,9 @@ export default function SignInForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Password
+            </label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -105,7 +190,11 @@ export default function SignInForm() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
@@ -121,7 +210,10 @@ export default function SignInForm() {
 
         <p className="text-center text-sm text-slate-600 mt-6">
           Don't have an account?{" "}
-          <Link href="/sign-up" className="text-teal-600 font-semibold hover:underline">
+          <Link
+            href="/sign-up"
+            className="text-teal-600 font-semibold hover:underline"
+          >
             Sign Up
           </Link>
         </p>

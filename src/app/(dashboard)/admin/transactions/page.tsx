@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
 
 type TransactionItem = {
   _id: string;
@@ -16,29 +17,72 @@ type TransactionItem = {
   createdAt?: string;
 };
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 export default function AdminTransactionsPage() {
+  const { data: session, isPending } = useSession();
+  const adminEmail = session?.user?.email ?? "";
+  const adminName = session?.user?.name ?? "";
+
   const [payments, setPayments] = useState<TransactionItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
-
   const loadPayments = useCallback(async () => {
+    if (isPending) return;
+
     setLoading(true);
     try {
+      const token = await getOrSyncToken(adminEmail, adminName);
       const res = await fetch(`${baseUrl}/admin/payments`, {
         cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
-      if (!res.ok) throw new Error("Failed to load transactions");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to load transactions");
+      }
       const data = await res.json();
       setPayments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
-      toast.error("Could not load transactions.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not load transactions."
+      );
     } finally {
       setLoading(false);
     }
-  }, [baseUrl]);
+  }, [adminEmail, adminName, isPending]);
 
   useEffect(() => {
     loadPayments();
@@ -78,7 +122,7 @@ export default function AdminTransactionsPage() {
         </div>
       </div>
 
-      {loading ? (
+      {loading || isPending ? (
         <div className="h-64 bg-[#131b2e] border border-slate-800/80 rounded-2xl animate-pulse" />
       ) : payments.length === 0 ? (
         <div className="bg-[#131b2e] border border-slate-800/80 rounded-2xl p-10 text-center text-slate-400 text-sm">

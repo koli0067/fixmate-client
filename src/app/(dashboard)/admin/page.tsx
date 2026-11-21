@@ -4,6 +4,37 @@ import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, Wrench, Clock, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
+
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
 
 type AdminUserItem = {
   _id: string;
@@ -16,20 +47,29 @@ type AdminServiceItem = {
 };
 
 export default function AdminOverviewPage() {
+  const { data: session, isPending } = useSession();
+  const adminEmail = session?.user?.email ?? "";
+  const adminName = session?.user?.name ?? "";
+
   const [loading, setLoading] = useState(true);
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalTechnicians, setTotalTechnicians] = useState(0);
   const [pendingServices, setPendingServices] = useState(0);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
-
   const loadOverviewData = useCallback(async () => {
+    if (isPending) return;
+
     setLoading(true);
     try {
+      const token = await getOrSyncToken(adminEmail, adminName);
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
       const [usersRes, servicesRes] = await Promise.all([
-        fetch(`${baseUrl}/admin/users`, { cache: "no-store" }),
-        fetch(`${baseUrl}/admin/services`, { cache: "no-store" }),
+        fetch(`${baseUrl}/admin/users`, { cache: "no-store", headers }),
+        fetch(`${baseUrl}/admin/services`, { cache: "no-store", headers }),
       ]);
 
       if (usersRes.ok) {
@@ -49,13 +89,17 @@ export default function AdminOverviewPage() {
           servicesList.filter((s) => s.approvalStatus === "pending").length
         );
       }
+
+      if (!usersRes.ok || !servicesRes.ok) {
+        toast.error("Some admin overview stats could not be loaded.");
+      }
     } catch (error) {
       console.error("Failed to load admin overview:", error);
       toast.error("Could not load admin overview stats.");
     } finally {
       setLoading(false);
     }
-  }, [baseUrl]);
+  }, [adminEmail, adminName, isPending]);
 
   useEffect(() => {
     loadOverviewData();
@@ -94,7 +138,7 @@ export default function AdminOverviewPage() {
         </p>
       </div>
 
-      {loading ? (
+      {loading || isPending ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {[1, 2, 3].map((n) => (
             <div

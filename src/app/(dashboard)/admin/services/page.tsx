@@ -10,6 +10,37 @@ import {
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
+
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
 
 type ServiceItem = {
   _id: string;
@@ -38,35 +69,50 @@ function getApprovalBadge(status: string) {
 }
 
 export default function AdminServicesPage() {
+  const { data: session, isPending } = useSession();
+  const adminEmail = session?.user?.email ?? "";
+  const adminName = session?.user?.name ?? "";
+
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [loading, setLoading] = useState<boolean>(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const token = await getOrSyncToken(adminEmail, adminName);
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, [adminEmail, adminName]);
 
   const fetchServices = useCallback(async () => {
+    if (isPending) return;
+
     setLoading(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(
         `${baseUrl}/admin/services?status=${encodeURIComponent(filterStatus)}`,
-        { cache: "no-store" }
+        { cache: "no-store", headers }
       );
 
       if (!res.ok) {
-        throw new Error("Failed to fetch services");
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to fetch services");
       }
 
       const data = await res.json();
       setServices(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Admin services error:", error);
-      toast.error("Could not load services");
+      toast.error(
+        error instanceof Error ? error.message : "Could not load services"
+      );
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, filterStatus]);
+  }, [filterStatus, getAuthHeaders, isPending]);
 
   useEffect(() => {
     fetchServices();
@@ -78,16 +124,16 @@ export default function AdminServicesPage() {
   ) => {
     setUpdatingId(id);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${baseUrl}/admin/services/${id}/approval`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({ approvalStatus: newStatus }),
       });
 
       if (!res.ok) {
-        throw new Error("Failed to update status");
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to update status");
       }
 
       toast.success(
@@ -98,7 +144,11 @@ export default function AdminServicesPage() {
       fetchServices();
     } catch (error) {
       console.error("Approval update error:", error);
-      toast.error("Failed to update approval status");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update approval status"
+      );
     } finally {
       setUpdatingId(null);
     }
@@ -117,7 +167,8 @@ export default function AdminServicesPage() {
             Service Approval
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Review technician services and approve or reject listings before they go public.
+            Review technician services and approve or reject listings before they
+            go public.
           </p>
         </div>
 
@@ -137,7 +188,7 @@ export default function AdminServicesPage() {
       </div>
 
       {/* Content */}
-      {loading ? (
+      {loading || isPending ? (
         <div className="min-h-[45vh] flex items-center justify-center gap-2.5 text-slate-300">
           <Loader2 className="w-5 h-5 animate-spin text-teal-400" />
           <span className="text-sm">Loading services...</span>

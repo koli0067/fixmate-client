@@ -16,9 +16,40 @@ const SPECIALTIES = [
   "All-Rounder Technician",
 ];
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 export default function TechnicianSettingsPage() {
   const { data: session, isPending } = useSession();
   const userEmail = session?.user?.email ?? "";
+  const sessionName = session?.user?.name ?? "";
 
   const [formData, setFormData] = useState({
     name: "",
@@ -32,8 +63,13 @@ export default function TechnicianSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const token = await getOrSyncToken(userEmail, sessionName);
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, [sessionName, userEmail]);
 
   const loadProfile = useCallback(async () => {
     if (!userEmail) {
@@ -45,9 +81,10 @@ export default function TechnicianSettingsPage() {
 
     setLoading(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(
         `${baseUrl}/users/${encodeURIComponent(userEmail)}`,
-        { cache: "no-store" }
+        { cache: "no-store", headers }
       );
       if (res.ok) {
         const data = await res.json();
@@ -59,6 +96,9 @@ export default function TechnicianSettingsPage() {
           bio: data.bio || "",
           image: data.image || session?.user?.image || "",
         });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Could not load profile settings.");
       }
     } catch (error) {
       console.error("Failed to load profile:", error);
@@ -66,7 +106,13 @@ export default function TechnicianSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, isPending, session?.user?.image, session?.user?.name, userEmail]);
+  }, [
+    getAuthHeaders,
+    isPending,
+    session?.user?.image,
+    session?.user?.name,
+    userEmail,
+  ]);
 
   useEffect(() => {
     loadProfile();
@@ -87,11 +133,12 @@ export default function TechnicianSettingsPage() {
 
     setSaving(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(
         `${baseUrl}/users/${encodeURIComponent(userEmail)}`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(formData),
         }
       );
@@ -99,7 +146,8 @@ export default function TechnicianSettingsPage() {
       if (res.ok) {
         toast.success("Profile & settings updated successfully!");
       } else {
-        toast.error("Could not update profile.");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Could not update profile.");
       }
     } catch (error) {
       console.error("Update profile error:", error);

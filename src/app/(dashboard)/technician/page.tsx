@@ -27,12 +27,51 @@ type BookingRequest = {
   _id: string;
   serviceTitle: string;
   basePrice: number;
+  finalAmount?: number;
   customerName: string;
   customerEmail: string;
   preferredDate?: string;
   preferredTime?: string;
-  status: "pending" | "accepted" | "in_progress" | "completed" | "rejected";
+  status:
+    | "requested"
+    | "pending"
+    | "accepted"
+    | "in-progress"
+    | "in_progress"
+    | "completed"
+    | "rejected"
+    | "cancelled";
 };
+
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
 
 export default function TechnicianOverviewPage() {
   const { data: session, isPending } = useSession();
@@ -42,9 +81,6 @@ export default function TechnicianOverviewPage() {
   const [services, setServices] = useState<TechnicianService[]>([]);
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
 
   const loadOverviewData = useCallback(async () => {
     if (!technicianEmail) {
@@ -56,20 +92,30 @@ export default function TechnicianOverviewPage() {
 
     setLoading(true);
     try {
+      const token = await getOrSyncToken(technicianEmail, technicianName);
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
       const encodedEmail = encodeURIComponent(technicianEmail);
       const [servicesRes, bookingsRes] = await Promise.all([
         fetch(`${baseUrl}/services/technician/${encodedEmail}`, {
           cache: "no-store",
+          headers,
         }),
         fetch(`${baseUrl}/bookings/technician/${encodedEmail}`, {
           cache: "no-store",
+          headers,
         }),
       ]);
 
       if (servicesRes.ok) {
         const servicesData = await servicesRes.json();
         setServices(
-          Array.isArray(servicesData) ? servicesData : servicesData.services || []
+          Array.isArray(servicesData)
+            ? servicesData
+            : servicesData.services || []
         );
       }
 
@@ -87,7 +133,7 @@ export default function TechnicianOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, isPending, technicianEmail]);
+  }, [isPending, technicianEmail, technicianName]);
 
   useEffect(() => {
     loadOverviewData();
@@ -95,14 +141,17 @@ export default function TechnicianOverviewPage() {
 
   const totalServices = services.length;
   const pendingRequestsCount = requests.filter(
-    (req) => req.status === "pending"
+    (req) => req.status === "requested" || req.status === "pending"
   ).length;
   const completedJobsCount = requests.filter(
     (req) => req.status === "completed"
   ).length;
   const totalEarnings = requests
     .filter((req) => req.status === "completed")
-    .reduce((sum, req) => sum + Number(req.basePrice || 0), 0);
+    .reduce(
+      (sum, req) => sum + Number(req.finalAmount ?? req.basePrice ?? 0),
+      0
+    );
 
   const recentRequests = requests.slice(0, 5);
 
@@ -110,11 +159,13 @@ export default function TechnicianOverviewPage() {
     switch (status) {
       case "accepted":
         return "bg-sky-500/10 text-sky-400 border-sky-500/30";
+      case "in-progress":
       case "in_progress":
         return "bg-indigo-500/10 text-indigo-400 border-indigo-500/30";
       case "completed":
         return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
       case "rejected":
+      case "cancelled":
         return "bg-rose-500/10 text-rose-400 border-rose-500/30";
       default:
         return "bg-amber-500/10 text-amber-400 border-amber-500/30";
@@ -312,7 +363,7 @@ export default function TechnicianOverviewPage() {
                 </div>
 
                 <div className="text-sm font-bold text-white">
-                  ${req.basePrice}
+                  ${req.finalAmount ?? req.basePrice}
                 </div>
               </div>
             ))}

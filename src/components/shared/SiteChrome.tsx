@@ -12,7 +12,7 @@ export default function SiteChrome({ children }: { children: React.ReactNode }) 
   );
 
   if (isDashboard) {
-    return children;
+    return <>{children}</>;
   }
 
   return (

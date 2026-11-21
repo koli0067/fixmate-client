@@ -25,6 +25,36 @@ const CATEGORIES = [
 
 const SERVICE_MODES = ["Home Visit", "Shop Drop-off"];
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 export default function AddServicePage() {
   const { data: session } = useSession();
   const technicianName = session?.user?.name ?? "";
@@ -52,8 +82,6 @@ export default function AddServicePage() {
     message: string;
   } | null>(null);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
   const imgbbApiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
 
   const handleChange = (
@@ -165,9 +193,14 @@ export default function AddServicePage() {
         isAvailable: true,
       };
 
+      const token = await getOrSyncToken(technicianEmail, technicianName);
+
       const res = await fetch(`${baseUrl}/services`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 

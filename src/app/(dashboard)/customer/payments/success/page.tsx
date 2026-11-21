@@ -11,9 +11,44 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
+
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL ||
+  process.env.NEXT_PUBLIC_SERVER_URL ||
+  "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
 
 function SuccessContent() {
   const searchParams = useSearchParams();
+  const { data: session, isPending } = useSession();
+
   const sessionId = searchParams.get("session_id");
   const fallbackTxId = searchParams.get("txId");
   const fallbackAmount = searchParams.get("amount");
@@ -23,24 +58,23 @@ function SuccessContent() {
   const [txId, setTxId] = useState(fallbackTxId || "");
   const [amount, setAmount] = useState<string | number>(fallbackAmount || "");
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL ||
-    process.env.NEXT_PUBLIC_SERVER_URL ||
-    "http://localhost:5000";
-
   useEffect(() => {
     if (!sessionId) {
       setVerifying(false);
       return;
     }
 
+    if (isPending) return;
+
     let active = true;
 
     const verifySession = async () => {
       setVerifying(true);
       try {
-        const token =
-          typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const token = await getOrSyncToken(
+          session?.user?.email,
+          session?.user?.name
+        );
 
         const res = await fetch(
           `${baseUrl}/api/payments/verify?session_id=${encodeURIComponent(
@@ -81,7 +115,7 @@ function SuccessContent() {
     return () => {
       active = false;
     };
-  }, [baseUrl, sessionId, fallbackTxId, fallbackAmount]);
+  }, [sessionId, isPending, session?.user?.email, session?.user?.name, fallbackTxId, fallbackAmount]);
 
   if (verifying) {
     return (

@@ -1,8 +1,7 @@
-
 "use client";
 
-import { useState } from "react";
-import { signUp } from "@/lib/auth-client";
+import { useEffect, useState } from "react";
+import { signUp, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -10,6 +9,8 @@ import { Wrench, User, ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
+  const { data: session, isPending } = useSession();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,6 +18,20 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // আগে থেকেই লগইন করা থাকলে তার নিজের ড্যাশবোর্ডে পাঠাবে
+  useEffect(() => {
+    if (isPending || !session?.user) return;
+
+    const userRole = (session.user as { role?: string })?.role;
+    if (userRole === "admin") {
+      router.replace("/admin");
+    } else if (userRole === "technician") {
+      router.replace("/technician");
+    } else {
+      router.replace("/customer");
+    }
+  }, [isPending, router, session]);
 
   const validatePassword = (pass: string) => {
     if (pass.length < 6) return "Password must be at least 6 characters long.";
@@ -56,12 +71,12 @@ export default function SignUpPage() {
           onSuccess: () => {
             setLoading(false);
             toast.success("Account created successfully! Welcome to FixMate.");
-           
+
             if (role === "customer") {
-    router.push("/customer");
-  } else if (role === "technician") {
-    router.push("/technician");
-  }
+              router.replace("/customer");
+            } else if (role === "technician") {
+              router.replace("/technician");
+            }
           },
           onError: (ctx) => {
             setLoading(false);
@@ -78,7 +93,6 @@ export default function SignUpPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-12">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-        
         <div className="flex flex-col items-center mb-6">
           <Link href="/" className="flex items-center gap-2 mb-2">
             <div className="bg-teal-600 text-white p-2 rounded-xl">

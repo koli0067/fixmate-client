@@ -38,6 +38,36 @@ const CATEGORIES = [
 
 const SERVICE_MODES = ["Home Visit", "Shop Drop-off"];
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 type TechnicianService = {
   _id: string;
   title: string;
@@ -57,6 +87,7 @@ type TechnicianService = {
 export default function MyServicesPage() {
   const { data: session, isPending } = useSession();
   const technicianEmail = session?.user?.email ?? "";
+  const technicianName = session?.user?.name ?? "";
 
   const [services, setServices] = useState<TechnicianService[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,9 +113,15 @@ export default function MyServicesPage() {
   const [uploadingEditImage, setUploadingEditImage] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
   const imgbbApiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
+
+  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const token = await getOrSyncToken(technicianEmail, technicianName);
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, [technicianEmail, technicianName]);
 
   const loadMyServices = useCallback(async () => {
     if (!technicianEmail) {
@@ -96,15 +133,17 @@ export default function MyServicesPage() {
 
     setLoading(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(
         `${baseUrl}/services/technician/${encodeURIComponent(technicianEmail)}`,
-        { cache: "no-store" }
+        { cache: "no-store", headers }
       );
       if (res.ok) {
         const data = await res.json();
         setServices(Array.isArray(data) ? data : data.services || []);
       } else {
-        toast.error("Could not load your services.");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Could not load your services.");
       }
     } catch (error) {
       console.error("Failed to load services:", error);
@@ -112,7 +151,7 @@ export default function MyServicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, isPending, technicianEmail]);
+  }, [getAuthHeaders, isPending, technicianEmail]);
 
   useEffect(() => {
     loadMyServices();
@@ -233,9 +272,10 @@ export default function MyServicesPage() {
         approvalStatus: "pending" as const,
       };
 
+      const headers = await getAuthHeaders();
       const res = await fetch(`${baseUrl}/services/${editingService._id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(updatedPayload),
       });
 
@@ -252,7 +292,8 @@ export default function MyServicesPage() {
         );
         closeEditModal();
       } else {
-        toast.error("Could not update service.");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Could not update service.");
       }
     } catch (error: unknown) {
       const message =
@@ -269,11 +310,12 @@ export default function MyServicesPage() {
     const nextState = !service.isAvailable;
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(
         `${baseUrl}/services/${service._id}/availability`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ isAvailable: nextState }),
         }
       );
@@ -292,7 +334,8 @@ export default function MyServicesPage() {
             : "Service marked as unavailable."
         );
       } else {
-        toast.error("Could not update availability.");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Could not update availability.");
       }
     } catch (error) {
       console.error("Failed to update availability:", error);
@@ -304,15 +347,18 @@ export default function MyServicesPage() {
     setDeletingId(id);
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${baseUrl}/services/${id}`, {
         method: "DELETE",
+        headers,
       });
 
       if (res.ok) {
         setServices((prev) => prev.filter((item) => item._id !== id));
         toast.success("Service deleted.");
       } else {
-        toast.error("Could not delete the service.");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Could not delete the service.");
       }
     } catch (error) {
       console.error("Failed to delete service:", error);
@@ -479,7 +525,8 @@ export default function MyServicesPage() {
                         </AlertDialogTitle>
                         <AlertDialogDescription className="text-slate-400">
                           This action cannot be undone. "{service.title}
-                          " will be permanently removed from your services.
+                          " will be permanently removed from your
+                          services.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>

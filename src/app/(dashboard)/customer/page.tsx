@@ -14,6 +14,36 @@ import {
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 type BookingItem = {
   _id: string;
   serviceId: string;
@@ -57,35 +87,46 @@ export default function CustomerDashboardPage() {
     | undefined;
 
   const customerEmail = user?.email?.trim() || "";
+  const customerName = user?.name?.trim() || "";
 
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  const fetchCustomerBookings = useCallback(
+    async (email: string, name?: string) => {
+      setLoading(true);
+      try {
+        const token = await getOrSyncToken(email, name);
+        const res = await fetch(
+          `${baseUrl}/bookings/customer/${encodeURIComponent(email)}`,
+          {
+            cache: "no-store",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
 
-  const fetchCustomerBookings = useCallback(async (email: string) => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `${baseUrl}/bookings/customer/${encodeURIComponent(email)}`,
-        { cache: "no-store" }
-      );
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to fetch bookings");
+        }
 
-      if (!res.ok) {
-        throw new Error("Failed to fetch bookings");
+        const data = await res.json();
+        setBookings(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error loading customer overview:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Could not load your bookings"
+        );
+        setBookings([]);
+      } finally {
+        setLoading(false);
       }
-
-      const data = await res.json();
-      setBookings(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Error loading customer overview:", error);
-      toast.error("Could not load your bookings");
-      setBookings([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [baseUrl]);
+    },
+    []
+  );
 
   useEffect(() => {
     if (isPending) return;
@@ -93,8 +134,8 @@ export default function CustomerDashboardPage() {
       setLoading(false);
       return;
     }
-    fetchCustomerBookings(customerEmail);
-  }, [isPending, customerEmail, fetchCustomerBookings]);
+    fetchCustomerBookings(customerEmail, customerName);
+  }, [isPending, customerEmail, customerName, fetchCustomerBookings]);
 
   const totalRequests = bookings.length;
 
@@ -220,7 +261,7 @@ export default function CustomerDashboardPage() {
           </div>
 
           <Link
-            href="customer/bookings"
+            href="/customer/bookings"
             className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-teal-400 hover:text-teal-300 transition"
           >
             View All Bookings

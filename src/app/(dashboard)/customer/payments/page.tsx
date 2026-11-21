@@ -11,6 +11,38 @@ import {
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL ||
+  process.env.NEXT_PUBLIC_SERVER_URL ||
+  "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 type PaymentItem = {
   _id?: string;
   id?: string;
@@ -31,15 +63,11 @@ type PaymentItem = {
 export default function CustomerPaymentsPage() {
   const { data: session, isPending } = useSession();
   const customerEmail = session?.user?.email ?? "";
+  const customerName = session?.user?.name ?? "";
 
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL ||
-    process.env.NEXT_PUBLIC_SERVER_URL ||
-    "http://localhost:5000";
 
   const fetchPayments = useCallback(
     async (isManualRefresh = false) => {
@@ -55,17 +83,19 @@ export default function CustomerPaymentsPage() {
       }
 
       try {
-        const token =
-          typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const token = await getOrSyncToken(customerEmail, customerName);
         const encodedEmail = encodeURIComponent(customerEmail);
         const headers: HeadersInit = {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         };
 
-        let res = await fetch(`${baseUrl}/api/payments/customer/${encodedEmail}`, {
-          cache: "no-store",
-          headers,
-        });
+        let res = await fetch(
+          `${baseUrl}/api/payments/customer/${encodedEmail}`,
+          {
+            cache: "no-store",
+            headers,
+          }
+        );
 
         if (res.status === 404) {
           res = await fetch(`${baseUrl}/payments/customer/${encodedEmail}`, {
@@ -75,7 +105,8 @@ export default function CustomerPaymentsPage() {
         }
 
         if (!res.ok) {
-          throw new Error("Failed to load payments");
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to load payments");
         }
 
         const data = await res.json();
@@ -90,13 +121,17 @@ export default function CustomerPaymentsPage() {
         setPayments(list);
       } catch (error) {
         console.error("Payment history error:", error);
-        toast.error("Could not load payment history.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not load payment history."
+        );
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [baseUrl, customerEmail, isPending]
+    [customerEmail, customerName, isPending]
   );
 
   useEffect(() => {
@@ -177,7 +212,10 @@ export default function CustomerPaymentsPage() {
             <tbody className="divide-y divide-slate-800/70 text-sm">
               {payments.map((item, index) => {
                 const rowKey =
-                  item._id || item.id || item.transactionId || `payment-${index}`;
+                  item._id ||
+                  item.id ||
+                  item.transactionId ||
+                  `payment-${index}`;
                 const txDisplay =
                   item.transactionId || item.sessionId || "N/A";
                 const isPaid =

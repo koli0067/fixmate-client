@@ -17,6 +17,36 @@ type ServiceSummary = {
   technicianEmail?: string;
 };
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 export default function RepairRequestModal({
   service,
 }: {
@@ -45,9 +75,6 @@ export default function RepairRequestModal({
     preferredDate: "",
     problemDescription: "",
   });
-
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
 
   const todayDate = new Date().toLocaleDateString("en-CA");
 
@@ -113,9 +140,14 @@ export default function RepairRequestModal({
         paymentStatus: "unpaid",
       };
 
+      const token = await getOrSyncToken(user?.email, user?.name);
+
       const res = await fetch(`${baseUrl}/bookings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -200,8 +232,8 @@ export default function RepairRequestModal({
                     Repair Request Sent!
                   </h4>
                   <p className="text-xs text-slate-400">
-                    Your booking is now in "requested" status. You can track it
-                    in My Bookings.
+                    Your booking is now in "requested" status. You can
+                    track it in My Bookings.
                   </p>
                 </div>
                 <div className="flex items-center justify-center gap-3 pt-2">
@@ -213,7 +245,7 @@ export default function RepairRequestModal({
                     Close
                   </button>
                   <Link
-                   href="/customer/bookings"
+                    href="/customer/bookings"
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white"
                   >
                     Go to My Bookings

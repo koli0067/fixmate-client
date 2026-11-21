@@ -39,13 +39,32 @@ export default function DashboardLayout({
         ? "/technician"
         : "/customer";
 
+  // useEffect(() => {
+  //   if (isPending) return;
+  //   if (!session) {
+  //     router.replace("/sign-in");
+  //     return;
+  //   }
+
+  //   const routeRole = pathname.split("/")[1];
+  //   if (
+  //     (routeRole === "admin" || routeRole === "technician" || routeRole === "customer") &&
+  //     routeRole !== userRole
+  //   ) {
+  //     router.replace(roleDashboard);
+  //   }
+  // }, [isPending, pathname, roleDashboard, router, session, userRole]);
+
   useEffect(() => {
     if (isPending) return;
+
+    // লগইন না থাকলে যে পেজে যেতে চেয়েছিল তার লিংকসহ sign-in পেজে পাঠাবে
     if (!session) {
-      router.replace("/sign-in");
+      router.replace(`/sign-in?callbackUrl=${encodeURIComponent(pathname)}`);
       return;
     }
 
+    // ভুল রোলের পেজে ঢুকলে নিজের ড্যাশবোর্ডে পাঠাবে
     const routeRole = pathname.split("/")[1];
     if (
       (routeRole === "admin" || routeRole === "technician" || routeRole === "customer") &&

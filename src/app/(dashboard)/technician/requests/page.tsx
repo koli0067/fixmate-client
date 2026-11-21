@@ -54,6 +54,36 @@ const FILTER_TABS: { label: string; value: string }[] = [
   { label: "Rejected", value: "rejected" },
 ];
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+async function getOrSyncToken(email?: string | null, name?: string | null) {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    localStorage.getItem("token") || localStorage.getItem("auth_token");
+  if (existing) return existing;
+
+  if (!email) return null;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: name || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.token) {
+      localStorage.setItem("token", data.token);
+      return data.token as string;
+    }
+  } catch (err) {
+    console.error("Failed to sync JWT token:", err);
+  }
+
+  return null;
+}
+
 function normalizeStatus(status?: string): BookingStatus {
   const s = (status || "").toLowerCase();
   if (s === "pending") return "requested";
@@ -74,6 +104,7 @@ function normalizeStatus(status?: string): BookingStatus {
 export default function ManageRequestsPage() {
   const { data: session, isPending } = useSession();
   const technicianEmail = session?.user?.email ?? "";
+  const technicianName = session?.user?.name ?? "";
 
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,8 +116,13 @@ export default function ManageRequestsPage() {
     useState<BookingRequest | null>(null);
   const [finalAmountInput, setFinalAmountInput] = useState<string>("");
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const token = await getOrSyncToken(technicianEmail, technicianName);
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, [technicianEmail, technicianName]);
 
   const loadRequests = useCallback(async () => {
     if (!technicianEmail) {
@@ -98,12 +134,14 @@ export default function ManageRequestsPage() {
 
     setLoading(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(
         `${baseUrl}/bookings/technician/${encodeURIComponent(technicianEmail)}`,
-        { cache: "no-store" }
+        { cache: "no-store", headers }
       );
       if (!res.ok) {
-        throw new Error("Failed to fetch technician requests");
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to fetch technician requests");
       }
       const data = await res.json();
       const normalizedList: BookingRequest[] = Array.isArray(data)
@@ -115,11 +153,15 @@ export default function ManageRequestsPage() {
       setRequests(normalizedList);
     } catch (error) {
       console.error("Failed to load requests:", error);
-      toast.error("Could not load booking requests.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not load booking requests."
+      );
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, isPending, technicianEmail]);
+  }, [getAuthHeaders, isPending, technicianEmail]);
 
   useEffect(() => {
     loadRequests();
@@ -140,14 +182,16 @@ export default function ManageRequestsPage() {
         payload.finalAmount = finalAmount;
       }
 
+      const headers = await getAuthHeaders();
       const res = await fetch(`${baseUrl}/bookings/${id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        throw new Error("Failed to update status");
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to update status");
       }
 
       setRequests((prev) =>
@@ -167,7 +211,9 @@ export default function ManageRequestsPage() {
       setFinalAmountInput("");
     } catch (error) {
       console.error("Status update error:", error);
-      toast.error("Failed to update status.");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update status."
+      );
     } finally {
       setUpdatingId(null);
     }
