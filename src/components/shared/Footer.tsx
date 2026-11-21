@@ -1,4 +1,4 @@
-// src/components/shared/Footer.tsx
+
 import Link from "next/link";
 import {
   Wrench,
