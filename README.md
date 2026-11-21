@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FixMate — Full-Stack Service Booking & Repair Platform
 
-## Getting Started
+FixMate is a full-stack repair and service booking platform built with **Next.js**, **Express.js**, and **MongoDB**. It connects customers with verified technicians and provides role-based dashboards for customers, technicians, and administrators, complete with JWT authorization, role access control, job status tracking, and Stripe payment verification.
 
-First, run the development server:
+## Live Links
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Live Frontend:** [https://fixmate-client-side.vercel.app/](https://fixmate-client-side.vercel.app/)
+- **Backend API:** [https://fixmate-server-side.vercel.app](https://fixmate-server-side.vercel.app)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Key Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Authentication & Role-Based Access Control (RBAC)**
+  - Session handling with BetterAuth and JWT token synchronization (`/api/auth/jwt`).
+  - Role-specific access protection (`401` for unauthenticated requests, `403` for unauthorized roles or cross-user data access) across **Customer**, **Technician**, and **Admin** workflows.
+- **Customer Portal**
+  - Browse approved and available repair services with search, category, mode, and price sorting.
+  - Inspect service details and technician summaries before placing a booking request (`POST /api/bookings`).
+  - Track personal bookings (`GET /api/bookings/my`), cancel `requested` bookings (`PATCH /api/bookings/:id/cancel`), pay for completed jobs via Stripe (`POST /api/payments/create-checkout-session` & `GET /api/payments/verify`), and view payment history.
+- **Technician Portal**
+  - Create, update, toggle availability, and delete services (`POST /services`, `PATCH /services/:id`, `PATCH /services/:id/availability`, `DELETE /services/:id`).
+  - Manage incoming booking requests and follow the job status pipeline (`requested` → `accepted` → `in-progress` → `completed`, or `rejected`) with final amount calculation upon completion.
+- **Admin Dashboard**
+  - Overview metrics for total users, total technicians, and pending services.
+  - Moderate technician services (`approved` / `rejected` / `pending`), manage user roles (with self-role-change restriction), inspect all bookings, and review all payment transactions with total revenue.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech Stack
 
-## Learn More
+- **Frontend:** Next.js (App Router), React, TypeScript, Tailwind CSS, BetterAuth, Lucide React, Sonner
+- **Backend:** Node.js, Express.js, MongoDB, JWT (`jsonwebtoken`), Stripe SDK, CORS
+- **Deployment:** Vercel
 
-To learn more about Next.js, take a look at the following resources:
+## Environment Variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Frontend (`.env.local` / Vercel)
+- `NEXT_PUBLIC_SERVER_BASE_URL` — Backend API base URL (without trailing slash)
+- `NEXT_PUBLIC_APP_URL` — Frontend application URL
+- BetterAuth & database environment variables configured in your Next.js environment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Backend (`.env` / Vercel)
+- `PORT` — Server port (default: `5000`)
+- `DB_URL` — MongoDB connection string
+- `JWT_SECRET` — Secret key for signing and verifying JWT tokens
+- `STRIPE_SECRET_KEY` — Stripe secret key for checkout sessions and payment verification
+- `CLIENT_URL` — Allowed frontend client URL
+- `ALLOWED_ORIGINS` — Comma-separated allowed CORS origins
 
-## Deploy on Vercel
+## Local Setup
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Clone the client repository**
+   ```bash
+   git clone [https://github.com/koli0067/fixmate-client.git](https://github.com/koli0067/fixmate-client.git)
+   cd fixmate-client
