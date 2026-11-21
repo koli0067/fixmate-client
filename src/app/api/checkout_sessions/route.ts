@@ -10,6 +10,7 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+    
 
     const headersList = await headers();
     const origin = headersList.get("origin") || "http://localhost:3000";
