@@ -1,52 +1,59 @@
 # FixMate — Full-Stack Service Booking & Repair Platform
 
-FixMate is a full-stack repair and service booking platform built with **Next.js**, **Express.js**, and **MongoDB**. It connects customers with verified technicians and provides role-based dashboards for customers, technicians, and administrators, complete with JWT authorization, role access control, job status tracking, and Stripe payment verification.
+## Project Name
+**FixMate**
 
-## Live Links
+## Purpose
+FixMate is a full-stack home repair and service booking platform designed to connect customers with verified technicians in a reliable, transparent workflow. The platform streamlines service discovery, booking requests, technician job status progression (`requested` → `accepted` → `in-progress` → `completed`), Stripe payment processing, and administrative moderation under strict role-based access control.
 
-- **Live Frontend:** [https://fixmate-client-side.vercel.app/](https://fixmate-client-side.vercel.app/)
-- **Backend API:** [https://fixmate-server-side.vercel.app](https://fixmate-server-side.vercel.app)
+## Live URL
+- **Live Client Website:** [https://fixmate-client-side.vercel.app/](https://fixmate-client-side.vercel.app/)
+- **Live Server API:** [https://fixmate-server-side.vercel.app](https://fixmate-server-side.vercel.app)
+
+## Admin Credentials (Demo / Test Account)
+> **Note:** These credentials are provided strictly for testing and evaluation purposes.
+
+- **Role:** Admin
+- **Email:** `jim@gmail.com`
+- **Password:** `Jim28016`
 
 ## Key Features
+- **Authentication & Role-Based Access Control (RBAC):**
+  - Secure email/password authentication powered by BetterAuth alongside custom JWT verification (`Bearer` token) on protected Express routes.
+  - Strict role-based authorization (`401 Unauthorized` & `403 Forbidden`) separating **Customer**, **Technician**, and **Admin** permissions and preventing cross-user data access.
+- **Customer Portal:**
+  - Browse approved and available repair services with real-time search, category filtering, service mode filtering, and price sorting.
+  - View detailed service information and verified technician profiles before submitting booking requests.
+  - Track personal booking statuses, cancel pending (`requested`) bookings, complete secure online payments via Stripe Checkout for finished jobs, and view payment history.
+- **Technician Portal:**
+  - Create, edit, delete, and toggle availability (`isAvailable`) for personal repair services.
+  - Manage incoming customer booking requests and update job progress through a strict status pipeline (`requested` → `accepted` → `in-progress` → `completed` / `rejected`) with final billing calculation.
+- **Admin Dashboard:**
+  - View platform-wide overview statistics (Total Users, Total Technicians, Pending Services).
+  - Approve or reject technician-submitted services, manage user roles (with self-role-modification protection), monitor all platform bookings, and audit all payment transactions alongside total revenue.
 
-- **Authentication & Role-Based Access Control (RBAC)**
-  - Session handling with BetterAuth and JWT token synchronization (`/api/auth/jwt`).
-  - Role-specific access protection (`401` for unauthenticated requests, `403` for unauthorized roles or cross-user data access) across **Customer**, **Technician**, and **Admin** workflows.
-- **Customer Portal**
-  - Browse approved and available repair services with search, category, mode, and price sorting.
-  - Inspect service details and technician summaries before placing a booking request (`POST /api/bookings`).
-  - Track personal bookings (`GET /api/bookings/my`), cancel `requested` bookings (`PATCH /api/bookings/:id/cancel`), pay for completed jobs via Stripe (`POST /api/payments/create-checkout-session` & `GET /api/payments/verify`), and view payment history.
-- **Technician Portal**
-  - Create, update, toggle availability, and delete services (`POST /services`, `PATCH /services/:id`, `PATCH /services/:id/availability`, `DELETE /services/:id`).
-  - Manage incoming booking requests and follow the job status pipeline (`requested` → `accepted` → `in-progress` → `completed`, or `rejected`) with final amount calculation upon completion.
-- **Admin Dashboard**
-  - Overview metrics for total users, total technicians, and pending services.
-  - Moderate technician services (`approved` / `rejected` / `pending`), manage user roles (with self-role-change restriction), inspect all bookings, and review all payment transactions with total revenue.
+## NPM Packages Used
 
-## Tech Stack
+### Client (`fixmate-client`)
+- `next` — React framework with App Router for frontend pages and API routes
+- `react` & `react-dom` — Core UI library
+- `better-auth` — Authentication and session management
+- `lucide-react` — Clean icon library across dashboards and forms
+- `sonner` — Toast notifications for user feedback
+- `tailwindcss` — Utility-first CSS framework for responsive styling
+- `typescript` — Static type checking
 
-- **Frontend:** Next.js (App Router), React, TypeScript, Tailwind CSS, BetterAuth, Lucide React, Sonner
-- **Backend:** Node.js, Express.js, MongoDB, JWT (`jsonwebtoken`), Stripe SDK, CORS
-- **Deployment:** Vercel
-
-## Environment Variables
-
-### Frontend (`.env.local` / Vercel)
-- `NEXT_PUBLIC_SERVER_BASE_URL` — Backend API base URL (without trailing slash)
-- `NEXT_PUBLIC_APP_URL` — Frontend application URL
-- BetterAuth & database environment variables configured in your Next.js environment
-
-### Backend (`.env` / Vercel)
-- `PORT` — Server port (default: `5000`)
-- `DB_URL` — MongoDB connection string
-- `JWT_SECRET` — Secret key for signing and verifying JWT tokens
-- `STRIPE_SECRET_KEY` — Stripe secret key for checkout sessions and payment verification
-- `CLIENT_URL` — Allowed frontend client URL
-- `ALLOWED_ORIGINS` — Comma-separated allowed CORS origins
+### Server (`fixmate-server`)
+- `express` — RESTful backend web framework
+- `mongodb` — Official MongoDB driver for database operations
+- `jsonwebtoken` — JWT signing and verification for route protection
+- `stripe` — Stripe Checkout session creation and payment verification
+- `cors` — Cross-Origin Resource Sharing configuration
+- `dotenv` — Environment variable management
 
 ## Local Setup
 
-1. **Clone the client repository**
+1. **Clone the repository**
    ```bash
    git clone [https://github.com/koli0067/fixmate-client.git](https://github.com/koli0067/fixmate-client.git)
    cd fixmate-client
