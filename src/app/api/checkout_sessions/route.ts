@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { stripe } from "@/lib/stripe";
-import { auth } from "@/lib/auth"; // আপনার Better Auth instance পাথ অনুযায়ী
+import { auth } from "@/lib/auth"; 
 
 export async function POST(req: Request) {
   try {
