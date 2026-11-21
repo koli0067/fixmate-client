@@ -4,36 +4,10 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Shield, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
+import { getValidToken } from "@/lib/jwt-token";
 
 const baseUrl =
   process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
-
-async function getOrSyncToken(email?: string | null, name?: string | null) {
-  if (typeof window === "undefined") return null;
-
-  const existing =
-    localStorage.getItem("token") || localStorage.getItem("auth_token");
-  if (existing) return existing;
-
-  if (!email) return null;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name: name || "" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data?.token) {
-      localStorage.setItem("token", data.token);
-      return data.token as string;
-    }
-  } catch (err) {
-    console.error("Failed to sync JWT token:", err);
-  }
-
-  return null;
-}
 
 type AdminUser = {
   _id: string;
@@ -60,7 +34,7 @@ export default function ManageUsersPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
-    const token = await getOrSyncToken(currentAdminEmail, currentAdminName);
+    const token = await getValidToken(currentAdminEmail, currentAdminName);
     return {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -69,6 +43,10 @@ export default function ManageUsersPage() {
 
   const loadUsers = useCallback(async () => {
     if (isPending) return;
+    if (!currentAdminEmail) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -91,7 +69,7 @@ export default function ManageUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders, isPending]);
+  }, [currentAdminEmail, getAuthHeaders, isPending]);
 
   useEffect(() => {
     loadUsers();
