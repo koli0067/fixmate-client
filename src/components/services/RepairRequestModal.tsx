@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { X, Wrench, CheckCircle2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
+import { getValidToken } from "@/lib/jwt-token";
 
 type ServiceSummary = {
   _id: string;
@@ -19,33 +20,6 @@ type ServiceSummary = {
 
 const baseUrl =
   process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
-
-async function getOrSyncToken(email?: string | null, name?: string | null) {
-  if (typeof window === "undefined") return null;
-
-  const existing =
-    localStorage.getItem("token") || localStorage.getItem("auth_token");
-  if (existing) return existing;
-
-  if (!email) return null;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name: name || "" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data?.token) {
-      localStorage.setItem("token", data.token);
-      return data.token as string;
-    }
-  } catch (err) {
-    console.error("Failed to sync JWT token:", err);
-  }
-
-  return null;
-}
 
 export default function RepairRequestModal({
   service,
@@ -140,7 +114,7 @@ export default function RepairRequestModal({
         paymentStatus: "unpaid",
       };
 
-      const token = await getOrSyncToken(user?.email, user?.name);
+      const token = await getValidToken(user?.email, user?.name);
 
       const res = await fetch(`${baseUrl}/bookings`, {
         method: "POST",

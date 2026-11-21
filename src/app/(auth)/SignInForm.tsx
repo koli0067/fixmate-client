@@ -2,33 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signIn, useSession } from "@/lib/auth-client";
+import { clearJwtToken, getValidToken } from "@/lib/jwt-token";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Wrench, Eye, EyeOff } from "lucide-react";
-
-const baseUrl =
-  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
-
-async function syncJwtToken(email: string, name?: string) {
-  if (!email) return null;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name: name || "" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data?.token) {
-      localStorage.setItem("token", data.token);
-      return data as { token: string; role?: string; email?: string };
-    }
-  } catch (err) {
-    console.error("Failed to sync JWT token:", err);
-  }
-  return null;
-}
 
 function getSafeCallbackUrl(url: string | null) {
   if (!url) return null;
@@ -79,14 +57,14 @@ export default function SignInForm() {
     let active = true;
 
     const redirectExisting = async () => {
-      const synced = await syncJwtToken(
+      await getValidToken(
         session.user.email || "",
         session.user.name || ""
       );
       if (!active || hasRedirectedRef.current) return;
 
       const userRole =
-        synced?.role || (session.user as { role?: string })?.role || "customer";
+        (session.user as { role?: string })?.role || "customer";
       navigateAfterAuth(userRole);
     };
 
@@ -102,8 +80,7 @@ export default function SignInForm() {
     if (loading || hasRedirectedRef.current) return;
 
     setLoading(true);
-    localStorage.removeItem("token");
-    localStorage.removeItem("auth_token");
+    clearJwtToken();
 
     try {
       await signIn.email(
@@ -116,15 +93,13 @@ export default function SignInForm() {
             const signedInEmail = ctx.data?.user?.email || email.trim();
             const signedInName = ctx.data?.user?.name || "";
 
-            const synced = await syncJwtToken(signedInEmail, signedInName);
+            await getValidToken(signedInEmail, signedInName);
 
             setLoading(false);
             toast.success("Signed in successfully!");
 
             const userRole =
-              synced?.role ||
-              (ctx.data?.user as { role?: string })?.role ||
-              "customer";
+              (ctx.data?.user as { role?: string })?.role || "customer";
             navigateAfterAuth(userRole);
           },
           onError: (ctx) => {

@@ -1,23 +1,23 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
-import { 
-  Wrench, 
-  LayoutDashboard, 
-  ShoppingBag, 
-  CreditCard, 
-  Settings, 
-  LogOut, 
-  Menu, 
-  X, 
+import { clearJwtToken, getValidToken } from "@/lib/jwt-token";
+import {
+  Wrench,
+  LayoutDashboard,
+  ShoppingBag,
+  CreditCard,
+  Settings,
+  LogOut,
+  Menu,
+  X,
   Home,
   Search,
   Bell,
-  Mail
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +31,8 @@ export default function DashboardLayout({
   const { data: session, isPending } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const userEmail = session?.user?.email ?? "";
+  const userName = session?.user?.name ?? "";
   const userRole = (session?.user as { role?: string })?.role || "customer";
   const roleDashboard =
     userRole === "admin"
@@ -39,26 +41,10 @@ export default function DashboardLayout({
         ? "/technician"
         : "/customer";
 
-  // useEffect(() => {
-  //   if (isPending) return;
-  //   if (!session) {
-  //     router.replace("/sign-in");
-  //     return;
-  //   }
-
-  //   const routeRole = pathname.split("/")[1];
-  //   if (
-  //     (routeRole === "admin" || routeRole === "technician" || routeRole === "customer") &&
-  //     routeRole !== userRole
-  //   ) {
-  //     router.replace(roleDashboard);
-  //   }
-  // }, [isPending, pathname, roleDashboard, router, session, userRole]);
-
   useEffect(() => {
     if (isPending) return;
 
-    // লগইন না থাকলে যে পেজে যেতে চেয়েছিল তার লিংকসহ sign-in পেজে পাঠাবে
+    // লগইন না থাকলে যে পেজে যেতে চেয়েছিল তার লিংকসহ sign-in পেজে পাঠাবে
     if (!session) {
       router.replace(`/sign-in?callbackUrl=${encodeURIComponent(pathname)}`);
       return;
@@ -74,6 +60,11 @@ export default function DashboardLayout({
     }
   }, [isPending, pathname, roleDashboard, router, session, userRole]);
 
+  useEffect(() => {
+    if (isPending || !userEmail) return;
+    void getValidToken(userEmail, userName);
+  }, [isPending, userEmail, userName]);
+
   if (isPending || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#090d16] text-slate-300">
@@ -83,6 +74,7 @@ export default function DashboardLayout({
   }
 
   const handleSignOut = async () => {
+    clearJwtToken();
     await signOut({
       fetchOptions: {
         onSuccess: () => {
@@ -97,7 +89,7 @@ export default function DashboardLayout({
     });
   };
 
-  // রোল অনুযায়ী সাইডবার মেনু
+  // রোল অনুযায়ী সাইডবার মেনু
   const getSidebarLinks = () => {
     if (userRole === "admin") {
       return [
@@ -127,21 +119,22 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex">
-      
       {/* মোবাইল ওভারলে */}
       {sidebarOpen && (
-        <div 
-          onClick={() => setSidebarOpen(false)} 
+        <div
+          onClick={() => setSidebarOpen(false)}
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 lg:hidden"
         />
       )}
 
       {/* সাইডবার (Sidebar) - স্ক্রিনশটের মতো ডার্ক স্টাইল */}
-      <aside className={`
+      <aside
+        className={`
         fixed lg:static inset-y-0 left-0 z-50 w-72 bg-[#0d1322] border-r border-slate-800/80 
         flex flex-col justify-between transition-transform duration-300 ease-in-out
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-      `}>
+      `}
+      >
         <div className="p-6 space-y-6">
           {/* লোগো */}
           <div className="flex items-center justify-between">
@@ -153,8 +146,8 @@ export default function DashboardLayout({
                 Fix<span className="text-teal-500">Mate</span>
               </span>
             </Link>
-            <button 
-              onClick={() => setSidebarOpen(false)} 
+            <button
+              onClick={() => setSidebarOpen(false)}
               className="lg:hidden text-slate-400 hover:text-white"
             >
               <X className="w-6 h-6" />
@@ -164,12 +157,17 @@ export default function DashboardLayout({
           {/* ইউজার পোর্টাল কার্ড */}
           <div className="bg-[#131b2e] border border-slate-800/80 p-3.5 rounded-2xl flex items-center gap-3">
             <img
-              src={session?.user?.image || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"}
+              src={
+                session?.user?.image ||
+                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
+              }
               alt="User"
               className="w-10 h-10 rounded-full object-cover border-2 border-teal-500"
             />
             <div className="overflow-hidden">
-              <p className="text-sm font-bold text-white truncate">{session?.user?.name || "User"}</p>
+              <p className="text-sm font-bold text-white truncate">
+                {session?.user?.name || "User"}
+              </p>
               <p className="text-[11px] text-teal-400 font-medium capitalize">
                 {userRole} Portal
               </p>
@@ -231,9 +229,8 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      {/* মূল কন্টেন্ট এরিয়া */}
+      {/* মূল কন্টেন্ট এরিয়া */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#090d16]">
-        
         {/* টপ বার (Top Bar) */}
         <header className="h-20 bg-[#090d16]/80 border-b border-slate-800/80 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
           <div className="flex items-center gap-4 flex-1 max-w-xl">
@@ -266,7 +263,10 @@ export default function DashboardLayout({
               <span className="absolute top-1 right-1 w-2 h-2 bg-teal-500 rounded-full"></span>
             </button>
             <img
-              src={session?.user?.image || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"}
+              src={
+                session?.user?.image ||
+                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
+              }
               alt="User"
               className="w-9 h-9 rounded-full object-cover border border-teal-500"
             />
@@ -274,11 +274,8 @@ export default function DashboardLayout({
         </header>
 
         {/* পেজ কন্টেন্ট */}
-        <main className="flex-1 p-6 sm:p-8 overflow-y-auto">
-          {children}
-        </main>
+        <main className="flex-1 p-6 sm:p-8 overflow-y-auto">{children}</main>
       </div>
-
     </div>
   );
 }

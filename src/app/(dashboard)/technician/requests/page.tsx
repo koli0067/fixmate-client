@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
+import { getValidToken } from "@/lib/jwt-token";
 
 type BookingStatus =
   | "requested"
@@ -57,33 +58,6 @@ const FILTER_TABS: { label: string; value: string }[] = [
 const baseUrl =
   process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
 
-async function getOrSyncToken(email?: string | null, name?: string | null) {
-  if (typeof window === "undefined") return null;
-
-  const existing =
-    localStorage.getItem("token") || localStorage.getItem("auth_token");
-  if (existing) return existing;
-
-  if (!email) return null;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name: name || "" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data?.token) {
-      localStorage.setItem("token", data.token);
-      return data.token as string;
-    }
-  } catch (err) {
-    console.error("Failed to sync JWT token:", err);
-  }
-
-  return null;
-}
-
 function normalizeStatus(status?: string): BookingStatus {
   const s = (status || "").toLowerCase();
   if (s === "pending") return "requested";
@@ -117,7 +91,7 @@ export default function ManageRequestsPage() {
   const [finalAmountInput, setFinalAmountInput] = useState<string>("");
 
   const getAuthHeaders = useCallback(async (): Promise<HeadersInit> => {
-    const token = await getOrSyncToken(technicianEmail, technicianName);
+    const token = await getValidToken(technicianEmail, technicianName);
     return {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

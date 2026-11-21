@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signUp, useSession } from "@/lib/auth-client";
+import { clearJwtToken, getValidToken } from "@/lib/jwt-token";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -55,6 +56,8 @@ export default function SignUpPage() {
     }
 
     setLoading(true);
+    clearJwtToken();
+
     try {
       await signUp.email(
         {
@@ -68,7 +71,8 @@ export default function SignUpPage() {
           bio: "",
         },
         {
-          onSuccess: () => {
+          onSuccess: async () => {
+            await getValidToken(email, name);
             setLoading(false);
             toast.success("Account created successfully! Welcome to FixMate.");
 
