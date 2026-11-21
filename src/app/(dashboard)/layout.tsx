@@ -45,7 +45,6 @@ export default function DashboardLayout({
     if (isPending) return;
 
     // লগইন না থাকলে যে পেজে যেতে চেয়েছিল তার লিংকসহ sign-in পেজে পাঠাবে!
-
     if (!session) {
       router.replace(`/sign-in?callbackUrl=${encodeURIComponent(pathname)}`);
       return;
@@ -54,7 +53,9 @@ export default function DashboardLayout({
     // ভুল রোলের পেজে ঢুকলে নিজের ড্যাশবোর্ডে পাঠাবে!
     const routeRole = pathname.split("/")[1];
     if (
-      (routeRole === "admin" || routeRole === "technician" || routeRole === "customer") &&
+      (routeRole === "admin" ||
+        routeRole === "technician" ||
+        routeRole === "customer") &&
       routeRole !== userRole
     ) {
       router.replace(roleDashboard);
@@ -91,7 +92,6 @@ export default function DashboardLayout({
   };
 
   // রোল অনুযায়ী সাইডবার মেনু
-  
   const getSidebarLinks = () => {
     if (userRole === "admin") {
       return [
@@ -121,7 +121,6 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex">
-
       {/* মোবাইল ওভারলে */}
       {sidebarOpen && (
         <div
@@ -130,7 +129,7 @@ export default function DashboardLayout({
         />
       )}
 
-      {/* সাইডবার (Sidebar) - স্ক্রিনশটের মতো ডার্ক স্টাইল */}
+      {/* সাইডবার (Sidebar) */}
       <aside
         className={`
         fixed lg:static inset-y-0 left-0 z-50 w-72 bg-[#0d1322] border-r border-slate-800/80 
@@ -255,7 +254,7 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          {/* টপ রাইট আইকনসমূহ */}
+          {/* টপ রাইট আইকন ও ইউজার তথ্য */}
           <div className="flex items-center gap-4">
             <button className="bg-[#131b2e] border border-slate-800 p-2.5 rounded-xl text-slate-300 hover:text-white transition relative">
               <Mail className="w-4 h-4" />
@@ -265,14 +264,25 @@ export default function DashboardLayout({
               <Bell className="w-4 h-4" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-teal-500 rounded-full"></span>
             </button>
-            <img
-              src={
-                session?.user?.image ||
-                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
-              }
-              alt="User"
-              className="w-9 h-9 rounded-full object-cover border border-teal-500"
-            />
+
+            <div className="flex items-center gap-2.5">
+              <img
+                src={
+                  session?.user?.image ||
+                  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
+                }
+                alt={userName || "User"}
+                className="w-9 h-9 rounded-full object-cover border border-teal-500 shrink-0"
+              />
+              <div className="hidden sm:block leading-tight">
+                <p className="text-xs font-semibold text-white">
+                  {userName || "User"}
+                </p>
+                <p className="text-[11px] font-medium text-teal-400 capitalize">
+                  {userRole}
+                </p>
+              </div>
+            </div>
           </div>
         </header>
 

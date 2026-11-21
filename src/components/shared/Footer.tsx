@@ -103,9 +103,9 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/#how-it-works" className="hover:text-teal-400 transition flex items-center gap-1.5">
+                <Link href="/about" className="hover:text-teal-400 transition flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
-                  How It Works
+                  How It Works / About
                 </Link>
               </li>
             </ul>
