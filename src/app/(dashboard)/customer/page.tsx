@@ -13,36 +13,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
+import { getValidToken } from "@/lib/jwt-token";
 
 const baseUrl =
   process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
-
-async function getOrSyncToken(email?: string | null, name?: string | null) {
-  if (typeof window === "undefined") return null;
-
-  const existing =
-    localStorage.getItem("token") || localStorage.getItem("auth_token");
-  if (existing) return existing;
-
-  if (!email) return null;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/auth/jwt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name: name || "" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data?.token) {
-      localStorage.setItem("token", data.token);
-      return data.token as string;
-    }
-  } catch (err) {
-    console.error("Failed to sync JWT token:", err);
-  }
-
-  return null;
-}
 
 type BookingItem = {
   _id: string;
@@ -96,7 +70,7 @@ export default function CustomerDashboardPage() {
     async (email: string, name?: string) => {
       setLoading(true);
       try {
-        const token = await getOrSyncToken(email, name);
+        const token = await getValidToken(email, name);
         const res = await fetch(
           `${baseUrl}/bookings/customer/${encodeURIComponent(email)}`,
           {
