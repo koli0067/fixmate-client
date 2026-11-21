@@ -17,6 +17,7 @@ const SPECIALTIES = [
   "All-Rounder Technician",
 ];
 
+
 const baseUrl =
   process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
 
