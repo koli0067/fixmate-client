@@ -44,13 +44,14 @@ export default function DashboardLayout({
   useEffect(() => {
     if (isPending) return;
 
-    // লগইন না থাকলে যে পেজে যেতে চেয়েছিল তার লিংকসহ sign-in পেজে পাঠাবে
+    // লগইন না থাকলে যে পেজে যেতে চেয়েছিল তার লিংকসহ sign-in পেজে পাঠাবে!
+
     if (!session) {
       router.replace(`/sign-in?callbackUrl=${encodeURIComponent(pathname)}`);
       return;
     }
 
-    // ভুল রোলের পেজে ঢুকলে নিজের ড্যাশবোর্ডে পাঠাবে
+    // ভুল রোলের পেজে ঢুকলে নিজের ড্যাশবোর্ডে পাঠাবে!
     const routeRole = pathname.split("/")[1];
     if (
       (routeRole === "admin" || routeRole === "technician" || routeRole === "customer") &&
@@ -90,6 +91,7 @@ export default function DashboardLayout({
   };
 
   // রোল অনুযায়ী সাইডবার মেনু
+  
   const getSidebarLinks = () => {
     if (userRole === "admin") {
       return [
@@ -119,6 +121,7 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex">
+
       {/* মোবাইল ওভারলে */}
       {sidebarOpen && (
         <div
