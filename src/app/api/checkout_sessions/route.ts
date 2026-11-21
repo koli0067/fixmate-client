@@ -4,6 +4,13 @@ import { stripe } from "@/lib/stripe";
 
 export async function POST(req: Request) {
   try {
+    if (!stripe || !process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        { error: "Stripe is not configured on the server" },
+        { status: 500 }
+      );
+    }
+
     const headersList = await headers();
     const origin = headersList.get("origin") || "http://localhost:3000";
 
