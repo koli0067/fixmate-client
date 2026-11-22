@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { stripe } from "@/lib/stripe";
-import { auth } from "@/lib/auth"; 
+import { auth } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
@@ -22,7 +22,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const userRole = String((session.user as { role?: string }).role || "customer").toLowerCase();
+    const userRole = String(
+      (session.user as { role?: string }).role || "customer"
+    ).toLowerCase();
     if (userRole !== "customer") {
       return NextResponse.json(
         { error: "Forbidden: only customers can initiate checkout" },
@@ -30,12 +32,17 @@ export async function POST(req: Request) {
       );
     }
 
-    const origin = headersList.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const origin =
+      headersList.get("origin") ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "http://localhost:3000";
 
     const body = await req.json().catch(() => ({}));
     const bookingId = String(body?.bookingId || "").trim();
     const serviceTitle = String(body?.serviceTitle || "").trim();
-    const customerEmail = String(session.user.email || body?.customerEmail || "").trim();
+    const customerEmail = String(
+      session.user.email || body?.customerEmail || ""
+    ).trim();
     const amountDollars = Number(body?.amount);
 
     if (!bookingId) {
@@ -71,8 +78,8 @@ export async function POST(req: Request) {
         bookingId,
         customerEmail,
       },
-      success_url: `${origin}/customer/payments/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/customer/payments/cancel`,
+      success_url: `${origin}/dashboard/customer/payments/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/dashboard/customer/payments/cancel`,
     });
 
     return NextResponse.json({

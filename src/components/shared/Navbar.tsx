@@ -15,6 +15,33 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [displayName, setDisplayName] = useState(session?.user?.name || "");
+  const [displayImage, setDisplayImage] = useState(session?.user?.image || "");
+
+  useEffect(() => {
+    setDisplayName(session?.user?.name || "");
+    setDisplayImage(session?.user?.image || "");
+  }, [session?.user?.name, session?.user?.image]);
+
+  useEffect(() => {
+    const onProfileUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        name?: string;
+        image?: string;
+      }>;
+      if (customEvent.detail?.name) {
+        setDisplayName(customEvent.detail.name);
+      }
+      if (typeof customEvent.detail?.image === "string") {
+        setDisplayImage(customEvent.detail.image);
+      }
+    };
+
+    window.addEventListener("fixmate:profile-updated", onProfileUpdated);
+    return () =>
+      window.removeEventListener("fixmate:profile-updated", onProfileUpdated);
+  }, []);
+
   // বাইরে ক্লিক করলে ড্রপডাউন বন্ধ করার জন্য
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -44,9 +71,9 @@ export default function Navbar() {
   };
 
   const getDashboardRoute = (role?: string) => {
-    if (role === "admin") return "/admin";
-    if (role === "technician") return "/technician";
-    return "/customer";
+    if (role === "admin") return "/dashboard/admin";
+    if (role === "technician") return "/dashboard/technician";
+    return "/dashboard/customer";
   };
 
   const navLinks = [
@@ -56,6 +83,11 @@ export default function Navbar() {
   ];
 
   const userRole = (session?.user as { role?: string })?.role || "customer";
+  const resolvedName = displayName || session?.user?.name || "User";
+  const resolvedImage =
+    displayImage ||
+    session?.user?.image ||
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
 
   return (
     <nav className="sticky top-0 z-50 bg-[#131b2e]/90 text-slate-100 backdrop-blur-md border-b border-slate-800">
@@ -102,11 +134,8 @@ export default function Navbar() {
                   className="flex items-center gap-2.5 focus:outline-none p-1 rounded-full hover:bg-slate-800/80 transition border border-transparent hover:border-slate-700"
                 >
                   <img
-                    src={
-                      session.user.image ||
-                      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
-                    }
-                    alt={session.user.name || "User"}
+                    src={resolvedImage}
+                    alt={resolvedName}
                     className="w-9 h-9 rounded-full object-cover border-2 border-teal-500"
                   />
                 </button>
@@ -117,7 +146,7 @@ export default function Navbar() {
                     <div className="px-4 py-3 border-b border-slate-800">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-white truncate">
-                          {session.user.name}
+                          {resolvedName}
                         </p>
                         <span className="text-[10px] uppercase bg-teal-500/15 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full font-bold shrink-0">
                           {userRole}
@@ -138,7 +167,7 @@ export default function Navbar() {
                     </Link>
 
                     <Link
-                      href="/profile"
+                      href="/dashboard/profile"
                       onClick={() => setDropdownOpen(false)}
                       className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-200 hover:bg-teal-500/10 hover:text-teal-400 transition font-medium"
                     >
@@ -216,17 +245,14 @@ export default function Navbar() {
                 {/* User Info & Role Badge */}
                 <div className="flex items-center gap-3 px-3 py-2">
                   <img
-                    src={
-                      session.user.image ||
-                      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
-                    }
-                    alt={session.user.name || "User"}
+                    src={resolvedImage}
+                    alt={resolvedName}
                     className="w-10 h-10 rounded-full object-cover border-2 border-teal-500"
                   />
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-white">
-                        {session.user.name}
+                        {resolvedName}
                       </p>
                       <span className="text-[10px] uppercase bg-teal-500/15 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full font-bold">
                         {userRole}
@@ -246,7 +272,7 @@ export default function Navbar() {
                 </Link>
 
                 <Link
-                  href="/profile"
+                  href="/dashboard/profile"
                   onClick={() => setIsOpen(false)}
                   className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-base font-medium text-slate-200 hover:bg-slate-800 hover:text-teal-400"
                 >

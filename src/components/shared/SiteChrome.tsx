@@ -6,10 +6,8 @@ import Navbar from "@/components/shared/Navbar";
 
 export default function SiteChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const dashboardRoots = ["/customer", "/technician", "/admin", "/profile"];
-  const isDashboard = dashboardRoots.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  );
+  const isDashboard =
+    pathname === "/dashboard" || pathname.startsWith("/dashboard/");
 
   if (isDashboard) {
     return <>{children}</>;
