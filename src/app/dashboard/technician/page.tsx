@@ -66,58 +66,74 @@ export default function TechnicianOverviewPage() {
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadOverviewData = useCallback(async () => {
-    if (!technicianEmail) {
-      if (!isPending) {
-        setLoading(false);
-      }
+const userRole = ((session?.user as { role?: string })?.role ?? "").toLowerCase();
+
+const loadOverviewData = useCallback(async () => {
+  if (isPending) return;
+
+  if (!technicianEmail || userRole !== "technician") {
+    setLoading(false);
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const token = await getValidToken(technicianEmail, technicianName);
+    if (!token) {
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    try {
-      const token = await getValidToken(technicianEmail, technicianName);
-      const headers: HeadersInit = {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      };
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    };
 
-      const encodedEmail = encodeURIComponent(technicianEmail);
-      const [servicesRes, bookingsRes] = await Promise.all([
-        fetch(`${baseUrl}/services/technician/${encodedEmail}`, {
-          cache: "no-store",
-          headers,
-        }),
-        fetch(`${baseUrl}/bookings/technician/${encodedEmail}`, {
-          cache: "no-store",
-          headers,
-        }),
-      ]);
+    const encodedEmail = encodeURIComponent(technicianEmail);
+    const [servicesRes, bookingsRes] = await Promise.all([
+      fetch(`${baseUrl}/services/technician/${encodedEmail}`, {
+        cache: "no-store",
+        headers,
+      }),
+      fetch(`${baseUrl}/bookings/technician/${encodedEmail}`, {
+        cache: "no-store",
+        headers,
+      }),
+    ]);
 
-      if (servicesRes.ok) {
-        const servicesData = await servicesRes.json();
-        setServices(
-          Array.isArray(servicesData)
-            ? servicesData
-            : servicesData.services || []
-        );
-      }
-
-      if (bookingsRes.ok) {
-        const bookingsData = await bookingsRes.json();
-        setRequests(Array.isArray(bookingsData) ? bookingsData : []);
-      }
-
-      if (!servicesRes.ok || !bookingsRes.ok) {
-        toast.error("Some overview data could not be loaded.");
-      }
-    } catch (error) {
-      console.error("Failed to load overview data:", error);
-      toast.error("Could not load overview data. Please try again.");
-    } finally {
-      setLoading(false);
+    if (
+      servicesRes.status === 401 ||
+      servicesRes.status === 403 ||
+      bookingsRes.status === 401 ||
+      bookingsRes.status === 403
+    ) {
+      return;
     }
-  }, [isPending, technicianEmail, technicianName]);
+
+    if (servicesRes.ok) {
+      const servicesData = await servicesRes.json();
+      setServices(
+        Array.isArray(servicesData)
+          ? servicesData
+          : servicesData.services || []
+      );
+    }
+
+    if (bookingsRes.ok) {
+      const bookingsData = await bookingsRes.json();
+      setRequests(Array.isArray(bookingsData) ? bookingsData : []);
+    }
+
+    if (!servicesRes.ok || !bookingsRes.ok) {
+      toast.error("Some overview data could not be loaded.");
+    }
+  } catch (error) {
+    console.error("Failed to load overview data:", error);
+    toast.error("Could not load overview data. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+}, [isPending, technicianEmail, technicianName, userRole]);
 
   useEffect(() => {
     loadOverviewData();

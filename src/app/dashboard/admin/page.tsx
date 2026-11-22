@@ -24,6 +24,7 @@ export default function AdminOverviewPage() {
   const { data: session, isPending } = useSession();
   const adminEmail = session?.user?.email ?? "";
   const adminName = session?.user?.name ?? "";
+  const userRole = ((session?.user as { role?: string })?.role ?? "").toLowerCase();
 
   const [loading, setLoading] = useState(true);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -32,7 +33,9 @@ export default function AdminOverviewPage() {
 
   const loadOverviewData = useCallback(async () => {
     if (isPending) return;
-    if (!adminEmail) {
+
+    // রোল admin না হলে বা ইমেইল না থাকলে API কল করবে না
+    if (!adminEmail || userRole !== "admin") {
       setLoading(false);
       return;
     }
@@ -40,15 +43,30 @@ export default function AdminOverviewPage() {
     setLoading(true);
     try {
       const token = await getValidToken(adminEmail, adminName);
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
       const headers: HeadersInit = {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Authorization: `Bearer ${token}`,
       };
 
       const [usersRes, servicesRes] = await Promise.all([
         fetch(`${baseUrl}/admin/users`, { cache: "no-store", headers }),
         fetch(`${baseUrl}/admin/services`, { cache: "no-store", headers }),
       ]);
+
+      // রিডাইরেক্ট বা পারমিশন এরর (401/403) হলে টোস্ট না দেখিয়ে চুপচাপ রিটার্ন করবে
+      if (
+        usersRes.status === 401 ||
+        usersRes.status === 403 ||
+        servicesRes.status === 401 ||
+        servicesRes.status === 403
+      ) {
+        return;
+      }
 
       if (usersRes.ok) {
         const usersData: AdminUserItem[] = await usersRes.json();
@@ -79,7 +97,7 @@ export default function AdminOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [adminEmail, adminName, isPending]);
+  }, [adminEmail, adminName, isPending, userRole]);
 
   useEffect(() => {
     loadOverviewData();
