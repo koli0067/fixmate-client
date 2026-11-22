@@ -35,6 +35,9 @@ function SuccessContent() {
   useEffect(() => {
     if (!sessionId) {
       setVerifying(false);
+      if (!fallbackTxId && fallbackAmount === null) {
+        setError("Missing checkout session ID.");
+      }
       return;
     }
 
@@ -62,7 +65,26 @@ function SuccessContent() {
           }
         );
 
-        const data = await res.json();
+        const rawText = await res.text();
+        let data: {
+          success?: boolean;
+          message?: string;
+          transactionId?: string;
+          amount?: string | number;
+          payment?: {
+            transactionId?: string;
+            amount?: string | number;
+          };
+        } = {};
+
+        try {
+          data = rawText ? JSON.parse(rawText) : {};
+        } catch {
+          throw new Error(
+            `Server returned unexpected response (${res.status}). Check server URL or route.`
+          );
+        }
+
         if (!res.ok || data?.success === false) {
           throw new Error(data?.message || "Payment verification failed");
         }

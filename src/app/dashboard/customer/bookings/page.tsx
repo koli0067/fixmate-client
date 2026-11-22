@@ -51,7 +51,9 @@ type CustomerBooking = {
 };
 
 const baseUrl =
-  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL ||
+  process.env.NEXT_PUBLIC_SERVER_URL ||
+  "http://localhost:5000";
 
 export default function CustomerBookingsPage() {
   const { data: session, isPending } = useSession();
@@ -144,7 +146,11 @@ export default function CustomerBookingsPage() {
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ bookingId: booking._id }),
+          body: JSON.stringify({
+            bookingId: booking._id,
+            customerEmail,
+            customerName,
+          }),
         }
       );
 

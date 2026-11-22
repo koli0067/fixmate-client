@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { XCircle, ArrowLeft } from "lucide-react";
+import { XCircle, RotateCcw } from "lucide-react";
 
 export default function PaymentCancelPage() {
   return (
@@ -16,8 +16,8 @@ export default function PaymentCancelPage() {
           href="/dashboard/customer/bookings"
           className="inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold py-2.5 px-5 rounded-xl transition"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to My Bookings
+          <RotateCcw className="w-3.5 h-3.5" />
+          Try Again
         </Link>
       </div>
     </div>

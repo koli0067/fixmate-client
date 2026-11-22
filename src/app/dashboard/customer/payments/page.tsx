@@ -63,19 +63,24 @@ export default function CustomerPaymentsPage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         };
 
-        let res = await fetch(
-          `${baseUrl}/api/payments/customer/${encodedEmail}`,
-          {
-            cache: "no-store",
-            headers,
-          }
-        );
+        let res = await fetch(`${baseUrl}/payments/customer/${encodedEmail}`, {
+          cache: "no-store",
+          headers,
+        });
 
         if (res.status === 404) {
-          res = await fetch(`${baseUrl}/payments/customer/${encodedEmail}`, {
-            cache: "no-store",
-            headers,
-          });
+          res = await fetch(
+            `${baseUrl}/api/payments/customer/${encodedEmail}`,
+            {
+              cache: "no-store",
+              headers,
+            }
+          );
+        }
+
+        if (res.status === 404) {
+          setPayments([]);
+          return;
         }
 
         if (!res.ok) {

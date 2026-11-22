@@ -19,6 +19,8 @@ import { getValidToken } from "@/lib/jwt-token";
 const baseUrl =
   process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
 const imgbbApiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY || "";
+const FALLBACK_AVATAR =
+  "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400";
 
 type ProfileState = {
   name: string;
@@ -34,6 +36,7 @@ export default function SharedProfilePage() {
   const { data: session, isPending, refetch } = useSession();
   const sessionEmail = session?.user?.email ?? "";
   const sessionName = session?.user?.name ?? "";
+  const sessionImage = session?.user?.image ?? "";
   const sessionRole =
     (session?.user as { role?: string } | undefined)?.role || "customer";
 
@@ -78,21 +81,21 @@ export default function SharedProfilePage() {
       if (res.ok) {
         const data = await res.json();
         setFormData({
-          name: data.name || session?.user?.name || "",
+          name: data.name || sessionName || "",
           email: data.email || sessionEmail,
           role: data.role || sessionRole,
           phone: data.phone || "",
           area: data.area || data.serviceArea || "",
           bio: data.bio || "",
-          image: data.image || session?.user?.image || "",
+          image: data.image || sessionImage || "",
         });
       } else {
         setFormData((prev) => ({
           ...prev,
-          name: prev.name || session?.user?.name || "",
+          name: prev.name || sessionName || "",
           email: sessionEmail,
           role: sessionRole,
-          image: prev.image || session?.user?.image || "",
+          image: prev.image || sessionImage || "",
         }));
       }
     } catch (error) {
@@ -104,9 +107,9 @@ export default function SharedProfilePage() {
   }, [
     getAuthHeaders,
     isPending,
-    session?.user?.image,
-    session?.user?.name,
     sessionEmail,
+    sessionImage,
+    sessionName,
     sessionRole,
   ]);
 
@@ -175,13 +178,19 @@ export default function SharedProfilePage() {
     setSaving(true);
     try {
       const headers = await getAuthHeaders();
+      const cleanName = formData.name.trim();
+      const cleanPhone = formData.phone.trim();
+      const cleanArea = formData.area.trim();
+      const cleanBio = formData.bio.trim();
+      const cleanImage = formData.image.trim();
+
       const payload = {
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        area: formData.area.trim(),
-        serviceArea: formData.area.trim(),
-        bio: formData.bio.trim(),
-        image: formData.image.trim(),
+        name: cleanName,
+        phone: cleanPhone,
+        area: cleanArea,
+        serviceArea: cleanArea,
+        bio: cleanBio,
+        image: cleanImage,
       };
 
       const res = await fetch(
@@ -198,12 +207,11 @@ export default function SharedProfilePage() {
         throw new Error(err.message || "Could not update profile.");
       }
 
-      // Sync Better Auth session & notify Navbar / Topbar without logging out
       if (typeof authClient?.updateUser === "function") {
         await authClient
           .updateUser({
-            name: payload.name,
-            image: payload.image || undefined,
+            name: cleanName,
+            ...(cleanImage ? { image: cleanImage } : {}),
           })
           .catch(() => null);
       }
@@ -212,11 +220,20 @@ export default function SharedProfilePage() {
         await refetch().catch(() => null);
       }
 
+      setFormData((prev) => ({
+        ...prev,
+        name: cleanName,
+        phone: cleanPhone,
+        area: cleanArea,
+        bio: cleanBio,
+        image: cleanImage,
+      }));
+
       window.dispatchEvent(
         new CustomEvent("fixmate:profile-updated", {
           detail: {
-            name: payload.name,
-            image: payload.image,
+            name: cleanName,
+            image: cleanImage,
             email: sessionEmail,
           },
         })
@@ -236,7 +253,6 @@ export default function SharedProfilePage() {
   return (
     <div className="text-slate-100 space-y-6">
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
         <div className="border-b border-slate-800/80 pb-5">
           <h1 className="text-2xl font-bold text-white">Update Profile</h1>
           <p className="text-sm text-slate-400 mt-1">
@@ -248,14 +264,10 @@ export default function SharedProfilePage() {
           <div className="h-96 bg-[#131b2e] border border-slate-800/80 rounded-2xl animate-pulse" />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Summary Card */}
             <div className="bg-[#131b2e] border border-slate-800/80 rounded-2xl p-6 space-y-4 h-fit">
               <div className="flex items-center gap-3.5">
                 <img
-                  src={
-                    formData.image ||
-                    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400"
-                  }
+                  src={formData.image || FALLBACK_AVATAR}
                   alt={formData.name || "User"}
                   className="w-16 h-16 rounded-full object-cover border-2 border-teal-500/40 shrink-0"
                 />
@@ -298,7 +310,6 @@ export default function SharedProfilePage() {
               )}
             </div>
 
-            {/* Right Edit Form */}
             <form
               onSubmit={handleSubmit}
               className="lg:col-span-2 bg-[#131b2e] border border-slate-800/80 rounded-2xl p-6 space-y-5"
@@ -307,7 +318,6 @@ export default function SharedProfilePage() {
                 Profile Information
               </h3>
 
-              {/* ImgBB File Upload */}
               <div className="space-y-2">
                 <label className="text-xs font-medium text-slate-300 block">
                   Profile Photo (ImgBB Upload)
@@ -337,7 +347,6 @@ export default function SharedProfilePage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Name */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-teal-400" />
@@ -354,7 +363,6 @@ export default function SharedProfilePage() {
                   />
                 </div>
 
-                {/* Phone */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5 text-teal-400" />
@@ -370,7 +378,6 @@ export default function SharedProfilePage() {
                   />
                 </div>
 
-                {/* Area */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-teal-400" />
@@ -386,7 +393,6 @@ export default function SharedProfilePage() {
                   />
                 </div>
 
-                {/* Read-only Role */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
@@ -402,7 +408,6 @@ export default function SharedProfilePage() {
                 </div>
               </div>
 
-              {/* Read-only Email */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-slate-500" />
@@ -417,7 +422,6 @@ export default function SharedProfilePage() {
                 />
               </div>
 
-              {/* Bio */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-teal-400" />

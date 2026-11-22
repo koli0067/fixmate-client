@@ -21,6 +21,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SERVER_BASE_URL || "http://localhost:5000";
+
+const FALLBACK_AVATAR =
+  "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400";
+
 export default function DashboardLayout({
   children,
 }: {
@@ -39,9 +45,47 @@ export default function DashboardLayout({
   const [displayImage, setDisplayImage] = useState(session?.user?.image ?? "");
 
   useEffect(() => {
-    setDisplayName(userName);
-    setDisplayImage(session?.user?.image ?? "");
+    setDisplayName((prev) => prev || userName);
+    setDisplayImage((prev) => prev || session?.user?.image || "");
   }, [userName, session?.user?.image]);
+
+  useEffect(() => {
+    if (!userEmail) return;
+
+    let active = true;
+
+    const syncUserFromDb = async () => {
+      try {
+        const token = await getValidToken(userEmail, userName);
+        const res = await fetch(
+          `${baseUrl}/users/${encodeURIComponent(userEmail)}`,
+          {
+            cache: "no-store",
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
+
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (!active) return;
+
+        if (data?.name) setDisplayName(data.name);
+        if (typeof data?.image === "string" && data.image.trim()) {
+          setDisplayImage(data.image.trim());
+        }
+      } catch {
+        // Ignore network sync errors; session/event still works
+      }
+    };
+
+    void syncUserFromDb();
+
+    return () => {
+      active = false;
+    };
+  }, [userEmail, userName]);
 
   useEffect(() => {
     const onProfileUpdated = (event: Event) => {
@@ -72,13 +116,11 @@ export default function DashboardLayout({
   useEffect(() => {
     if (isPending) return;
 
-    // লগইন না থাকলে যে পেজে যেতে চেয়েছিল তার লিংকসহ sign-in পেজে পাঠাবে!
     if (!session) {
       router.replace(`/sign-in?callbackUrl=${encodeURIComponent(pathname)}`);
       return;
     }
 
-    // ভুল রোলের পেজে ঢুকলে নিজের ড্যাশবোর্ডে পাঠাবে!
     const routeRole = pathname.split("/")[2];
     if (
       (routeRole === "admin" ||
@@ -119,7 +161,6 @@ export default function DashboardLayout({
     });
   };
 
-  // রোল অনুযায়ী সাইডবার মেনু
   const getSidebarLinks = () => {
     if (userRole === "admin") {
       return [
@@ -148,13 +189,10 @@ export default function DashboardLayout({
   const links = getSidebarLinks();
   const resolvedName = displayName || userName || "User";
   const resolvedImage =
-    displayImage ||
-    session?.user?.image ||
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+    displayImage || session?.user?.image || FALLBACK_AVATAR;
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex">
-      {/* মোবাইল ওভারলে */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -162,7 +200,6 @@ export default function DashboardLayout({
         />
       )}
 
-      {/* সাইডবার (Sidebar) */}
       <aside
         className={`
         fixed lg:static inset-y-0 left-0 z-50 w-72 bg-[#0d1322] border-r border-slate-800/80 
@@ -171,7 +208,6 @@ export default function DashboardLayout({
       `}
       >
         <div className="p-6 space-y-6">
-          {/* লোগো */}
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2.5 group">
               <div className="bg-teal-600 text-white p-2 rounded-xl group-hover:bg-teal-700 transition shadow-sm">
@@ -189,7 +225,6 @@ export default function DashboardLayout({
             </button>
           </div>
 
-          {/* ইউজার পোর্টাল কার্ড */}
           <div className="bg-[#131b2e] border border-slate-800/80 p-3.5 rounded-2xl flex items-center gap-3">
             <img
               src={resolvedImage}
@@ -206,7 +241,6 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          {/* নেভিগেশন মেনু */}
           <nav className="space-y-1.5 pt-2">
             {links.map((item) => {
               const Icon = item.icon;
@@ -242,7 +276,6 @@ export default function DashboardLayout({
           </nav>
         </div>
 
-        {/* নিচের লগআউট ও হোম বাটন */}
         <div className="p-6 border-t border-slate-800/80 space-y-2">
           <Link
             href="/"
@@ -261,9 +294,7 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      {/* মূল কন্টেন্ট এরিয়া */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#090d16]">
-        {/* টপ বার (Top Bar) */}
         <header className="h-20 bg-[#090d16]/80 border-b border-slate-800/80 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
           <div className="flex items-center gap-4 flex-1 max-w-xl">
             <button
@@ -273,7 +304,6 @@ export default function DashboardLayout({
               <Menu className="w-6 h-6" />
             </button>
 
-            {/* সার্চ বার */}
             <div className="relative w-full max-w-md hidden sm:block">
               <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
               <input
@@ -284,7 +314,6 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          {/* টপ রাইট আইকন ও ইউজার তথ্য */}
           <div className="flex items-center gap-4">
             <button className="bg-[#131b2e] border border-slate-800 p-2.5 rounded-xl text-slate-300 hover:text-white transition relative">
               <Mail className="w-4 h-4" />
@@ -313,7 +342,6 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        {/* পেজ কন্টেন্ট */}
         <main className="flex-1 p-6 sm:p-8 overflow-y-auto">{children}</main>
       </div>
     </div>
