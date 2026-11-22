@@ -43,7 +43,7 @@ export default function HowItWorks() {
           <span className="rounded-full border border-teal-800/60 bg-teal-950 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-teal-400">
             Simple Workflow
           </span>
-          <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+          <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl pt-5">
             How FixMate Works
           </h2>
           <p className="text-sm text-slate-400 sm:text-base">

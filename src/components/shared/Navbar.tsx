@@ -79,7 +79,7 @@ export default function Navbar() {
   const navLinks = [
     { name: "Home", href: "/" },
     { name: "Services", href: "/services" },
-    { name: "How It Works / About", href: "/about" },
+    { name: "About", href: "/about" },
   ];
 
   const userRole = (session?.user as { role?: string })?.role || "customer";

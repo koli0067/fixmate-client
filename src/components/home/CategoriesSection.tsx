@@ -79,7 +79,7 @@ export default function CategoriesSection() {
               Explore Services
             </span>
 
-            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl pt-5">
               Popular Repair Categories
             </h2>
 
